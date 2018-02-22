@@ -1,0 +1,17 @@
+#VERSION_NUMBER=2.5.3.0-37
+[HDP-2.5.3.0]
+name=HDP Version - HDP-2.5.3.0
+baseurl=http://10.10.10.1/HDP/centos7/
+gpgcheck=0
+gpgkey=http://10.10.10.1/HDP/centos7/RPM-GPG-KEY/RPM-GPG-KEY-Jenkins
+enabled=1
+priority=1
+
+
+[HDP-UTILS-1.1.0.21]
+name=HDP-UTILS Version - HDP-UTILS-1.1.0.21
+baseurl=http://10.10.10.1/HDP-UTILS/
+gpgcheck=0
+gpgkey=http://10.10.10.1/HDP/centos7/RPM-GPG-KEY/RPM-GPG-KEY-Jenkins
+enabled=1
+priority=1

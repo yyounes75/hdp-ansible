@@ -1,0 +1,245 @@
+wait: true
+wait_timeout: 3600
+hdp_one_instance_components: ['APP_TIMELINE_SERVER','ATLAS_SERVER','LOGSEARCH_SERVER','HIVE_METASTORE','METRICS_COLLECTOR','METRICS_GRAFANA','OOZIE_SERVER','RANGER_ADMIN','RANGER_TAGSYNC','RANGER_USERSYNC','SPARK_JOBHISTORYSERVER','WEBHCAT_SERVER','ZEPPELIN_MASTER','RANGER_KMS_SERVER']
+hdp_two_instance_components: ['HBASE_MASTER','NAMENODE','RESOURCEMANAGER','ZKFC']
+hdp_multiple_instance_components: ['HIVE_SERVER','INFRA_SOLR','JOURNALNODE','KAFKA_BROKER','KNOX_GATEWAY','LOGSEARCH_LOGFEEDER','METRICS_MONITOR','SPARK_THRIFTSERVER','ZOOKEEPER_SERVER','ATLAS_CLIENT','HBASE_CLIENT','HCAT','HDFS_CLIENT','HIVE_CLIENT','INFRA_SOLR_CLIENT','MAPREDUCE2_CLIENT','OOZIE_CLIENT','PIG','SLIDER','SPARK_CLIENT','SQOOP','TEZ_CLIENT','YARN_CLIENT','ZOOKEEPER_CLIENT','DATANODE','HBASE_REGIONSERVER','NODEMANAGER']
+conf_stack_hdp:
+  "hive-env":
+    properties:
+      - '"hive_database": "Existing MySQL / MariaDB Database"'
+      - '"hive_database_name": "{{ hive_database }}"'
+      - '"hive_database_type": "mysql"'
+      - '"hive_ambari_database": "MySQL"'
+      - '"javax.jdo.option.ConnectionURL": "jdbc:mysql://{{ ambari_server }}/{{ hive_database }}?createDatabaseIfNotExist=true"'
+
+  "hive-site":
+    properties:
+      - '"javax.jdo.option.ConnectionURL": "jdbc:mysql://{{ ambari_server }}/{{ hive_database }}"'
+      - '"javax.jdo.option.ConnectionUserName": "{{ hive_database_user }}"'
+      - '"javax.jdo.option.ConnectionPassword": "{{ hive_database_user_password }}"'
+  
+  "core-site":
+    properties:
+      - '"fs.defaultFS": "hdfs://{{ ambari_namespace }}"'
+      - '"ha.zookeeper.quorum": "{% for zk in hdp_topology_components.zookeeper_hosts %}{{ zk }}:2181{% if not loop.last %},{% endif %}{% endfor %}"'
+  
+  "yarn-site":
+    properties:
+      - '"hadoop.registry.zk.quorum": "{% for zk in hdp_topology_components.zookeeper_hosts %}{{ zk }}:2181{% if not loop.last %},{% endif %}{% endfor %}"'
+      - '"yarn.resourcemanager.recovery.enabled": "true"'
+      - '"yarn.resourcemanager.store.class": "org.apache.hadoop.yarn.server.resourcemanager.recovery.ZKRMStateStore"'
+      - '"yarn.resourcemanager.cluster-id": "yarn-cluster"'
+      - '"yarn.resourcemanager.ha.enabled": "true"'
+      - '"yarn.resourcemanager.ha.automatic-failover.zk-base-path": "/yarn-leader-election"'
+      - '"yarn.resourcemanager.ha.rm-ids": "rm1,rm2"'
+      - '"yarn.resourcemanager.address": "{{ hdp_topology_components.hdfs_namenode_hosts[0] }}:8050"'
+      - '"yarn.resourcemanager.scheduler.address": "{{ hdp_topology_components.hdfs_namenode_hosts[0] }}:8030"'
+      - '"yarn.resourcemanager.resource-tracker.address": "{{ hdp_topology_components.hdfs_namenode_hosts[0] }}:8025"'
+      - '"yarn.resourcemanager.admin.address": "{{ hdp_topology_components.hdfs_namenode_hosts[0] }}:8141"'
+      - '"yarn.resourcemanager.hostname": "{{ hdp_topology_components.hdfs_namenode_hosts[0] }}:8088"'
+      - '"yarn.resourcemanager.hostname.rm1": "{{ hdp_topology_components.hdfs_namenode_hosts[0] }}"'
+      - '"yarn.resourcemanager.hostname.rm2": "{{ hdp_topology_components.hdfs_namenode_hosts[1] }}"'
+      - '"yarn.resourcemanager.webapp.address": "{{ hdp_topology_components.hdfs_namenode_hosts[0] }}:8088"'
+      - '"yarn.resourcemanager.webapp.address.rm1": "{{ hdp_topology_components.hdfs_namenode_hosts[0] }}:8088"'
+      - '"yarn.resourcemanager.webapp.address.rm2": "{{ hdp_topology_components.hdfs_namenode_hosts[1] }}:8088"'
+      - '"yarn.resourcemanager.webapp.https.address": "{{ hdp_topology_components.hdfs_namenode_hosts[0] }}:8090"'
+      - '"yarn.resourcemanager.webapp.https.address.rm1": "{{ hdp_topology_components.hdfs_namenode_hosts[0] }}:8090"'
+      - '"yarn.resourcemanager.webapp.https.address.rm2": "{{ hdp_topology_components.hdfs_namenode_hosts[1] }}:8090"'
+      - '"yarn.resourcemanager.zk-address": "{% for zk in hdp_topology_components.zookeeper_hosts %}{{ zk }}:2181{% if not loop.last %},{% endif %}{% endfor %}"'
+      - '"yarn.acl.enable": "true"'
+      - '"yarn.client.nodemanager-connect.retry-interval-ms": "10000"'
+      
+  "hbase-site":
+    properties:
+      - '"hbase.rootdir": "hdfs://{{ ambari_namespace }}/apps/hbase/data"'
+      - '"hbase.security.authorization" : "true"'
+      - '"hbase.coprocessor.master.classes": "org.apache.ranger.authorization.hbase.RangerAuthorizationCoprocessor"'
+      - '"hbase.coprocessor.region.classes": "org.apache.hadoop.hbase.security.access.SecureBulkLoadEndpoint,org.apache.ranger.authorization.hbase.RangerAuthorizationCoprocessor"'
+      - '"hbase.coprocessor.regionserver.classes": "org.apache.ranger.authorization.hbase.RangerAuthorizationCoprocessor"'
+  
+  "hdfs-site":
+    properties:
+      - '"dfs.client.failover.proxy.provider.{{ ambari_namespace }}": "org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider"'
+      - '"dfs.ha.automatic-failover.enabled": "true"'
+      - '"dfs.ha.fencing.methods": "shell(/bin/true)"'
+      - '"dfs.ha.namenodes.{{ ambari_namespace }}": "nn1,nn2"'
+      - '"dfs.namenode.http-address": "{{ hdp_topology_components.hdfs_namenode_hosts[0] }}:50070"'
+      - '"dfs.namenode.http-address.{{ ambari_namespace }}.nn1": "{{ hdp_topology_components.hdfs_namenode_hosts[0] }}:50070"'
+      - '"dfs.namenode.http-address.{{ ambari_namespace }}.nn2": "{{ hdp_topology_components.hdfs_namenode_hosts[1] }}:50070"'
+      - '"dfs.namenode.https-address": "{{ hdp_topology_components.hdfs_namenode_hosts[0] }}:50470"'
+      - '"dfs.namenode.https-address.{{ ambari_namespace }}.nn1": "{{ hdp_topology_components.hdfs_namenode_hosts[0] }}:50470"'
+      - '"dfs.namenode.https-address.{{ ambari_namespace }}.nn2": "{{ hdp_topology_components.hdfs_namenode_hosts[1] }}:50470"'
+      - '"dfs.namenode.rpc-address.{{ ambari_namespace }}.nn1": "{{ hdp_topology_components.hdfs_namenode_hosts[0] }}:8020"'
+      - '"dfs.namenode.rpc-address.{{ ambari_namespace }}.nn2": "{{ hdp_topology_components.hdfs_namenode_hosts[1] }}:8020"'
+      - '"dfs.namenode.shared.edits.dir": "qjournal://{% for hosts in hdp_topology_components.hdfs_journalnode_hosts %}{{ hosts }}:8485{% if not loop.last %};{% endif %}{% if loop.last %}/{{ ambari_namespace }}{% endif %}{% endfor %}"'
+      - '"dfs.nameservices": "{{ ambari_namespace }}"'
+
+## RANGER
+  "admin-properties":
+    properties:
+      - '"DB_FLAVOR": "MYSQL"'
+      - '"SQL_CONNECTOR_JAR": "/usr/share/java/mysql-connector-java.jar"'
+      - '"db_host": "{{ ambari_server }}"'
+      - '"db_name": "{{ ranger_database }}"'
+      - '"db_user": "{{ ranger_database_user }}"'
+      - '"db_password": "{{ ranger_database_user_password }}"'
+      - '"policymgr_external_url": "http://{{ hdp_topology_components.ranger_hosts[0] }}:6080"'
+  
+  "ranger-admin-site":
+    properties:
+      - '"ranger.externalurl": "http://{{ hdp_topology_components.ranger_hosts[0] }}:6080"'
+      - '"ranger.jpa.jdbc.driver": "com.mysql.jdbc.Driver"'
+      - '"ranger.jpa.jdbc.url": "jdbc:mysql://{{ ambari_server }}:3306/{{ ranger_database }}"'
+      # - '"ranger.jpa.jdbc.driver": "org.postgresql.Driver"'
+      # - '"ranger.jpa.jdbc.url": "jdbc:postgresql://{{ database_options.external_hostname|default(ansible_fqdn,true) }}:{{ postgres_port }}/{{ database_options.rangeradmin_db_name }}"'
+      - '"ranger.audit.source.type": "solr"'
+      - '"ranger.audit.solr.zookeepers": "{% for zk in hdp_topology_components.zookeeper_hosts %}{{ zk }}:2181{% if not loop.last %},{% endif %}{% if loop.last %}/infra-solr{% endif %}{% endfor %}"'
+      
+  "ranger-env":
+    properties:
+      - '"xasecure.audit.destination.hdfs.dir" : "hdfs://{{ ambari_namespace }}:8020/ranger/audit"'
+      - '"xasecure.audit.destination.hdfs" : "true"'
+      
+  "ranger-hdfs-plugin-properties":
+    properties:
+      - '"ranger-hdfs-plugin-enabled": "Yes"'
+  
+  "ranger-hdfs-security":
+    properties:
+      - '"ranger.plugin.hdfs.policy.rest.url" : "http://{{ hdp_topology_components.ranger_hosts[0] }}:6080"'
+      - '"ranger.plugin.hdfs.policy.pollIntervalMs" : "30000"'
+  
+  "ranger-hive-security":
+    properties:
+      - '"ranger.plugin.hive.policy.rest.url": "http://{{ hdp_topology_components.ranger_hosts[0] }}:6080"'
+      - '"ranger.plugin.hive.policy.pollIntervalMs": "30000"'
+
+  "ranger-hive-audit":
+    properties:
+      - '"xasecure.audit.destination.db": "false"'
+      - '"xasecure.audit.destination.hdfs": "true"'
+      - '"xasecure.audit.destination.hdfs.dir": "hdfs://{{ ambari_namespace }}:8020/ranger/audit"'
+      - '"xasecure.audit.destination.solr": "true"'
+      - '"xasecure.audit.destination.solr.zookeepers": "{% for zk in hdp_topology_components.zookeeper_hosts %}{{ zk }}:2181{% if not loop.last %},{% endif %}{% if loop.last %}/infra-solr{% endif %}{% endfor %}"'
+
+  "ranger-yarn-plugin-properties":
+    properties:
+      - '"ranger-yarn-plugin-enabled": "Yes"'
+
+  "ranger-yarn-security":
+    properties:
+      - '"ranger.plugin.yarn.policy.rest.url": "http://{{ hdp_topology_components.ranger_hosts[0] }}:6080"'
+      - '"ranger.plugin.yarn.policy.pollIntervalMs": "30000"'
+
+  "ranger-yarn-audit":
+    properties:
+      - '"xasecure.audit.destination.db": "false"'
+      - '"xasecure.audit.destination.hdfs": "true"'
+      - '"xasecure.audit.destination.hdfs.dir": "hdfs://{{ ambari_namespace }}:8020/rangeraudit"'
+      - '"xasecure.audit.destination.solr": "true"'
+      - '"xasecure.audit.destination.solr.zookeepers": "{% for zk in hdp_topology_components.zookeeper_hosts %}{{ zk }}:2181{% if not loop.last %},{% endif %}{% if loop.last %}/infra-solr{% endif %}{% endfor %}"'
+
+  "ranger-hbase-plugin-properties":
+    properties:
+      - '"ranger-hbase-plugin-enabled": "Yes"'
+
+  "ranger-hbase-security":
+    properties:
+      - '"ranger.plugin.hbase.policy.rest.url": "http://{{ hdp_topology_components.ranger_hosts[0] }}:6080"'
+      - '"ranger.plugin.hbase.policy.pollIntervalMs": "30000"'
+
+  "ranger-hbase-audit":
+    properties:
+      - '"xasecure.audit.destination.db": "false"'
+      - '"xasecure.audit.destination.hdfs": "true"'
+      - '"xasecure.audit.destination.hdfs.dir": "hdfs://{{ ambari_namespace }}:8020/ranger/audit"'
+      - '"xasecure.audit.destination.solr": "true"'
+      - '"xasecure.audit.destination.solr.zookeepers": "{% for zk in hdp_topology_components.zookeeper_hosts %}{{ zk }}:2181{% if not loop.last %},{% endif %}{% if loop.last %}/infra-solr{% endif %}{% endfor %}"'
+
+  # "ranger-nifi-plugin-properties":
+  #   properties:
+  #     - '"ranger-nifi-plugin-enabled": "Yes"'
+  # 
+  # "ranger-nifi-security":
+  #   properties:
+  #     - '"ranger.plugin.nifi.policy.rest.url": "http://{{ groups["master"][0] }}:6080"'
+  #     - '"ranger.plugin.nifi.policy.pollIntervalMs": "30000"'
+  # 
+  # "ranger-nifi-audit":
+  #   properties:
+  #     - '"xasecure.audit.destination.hdfs": "true"'
+  #     - '"xasecure.audit.destination.hdfs.dir": "hdfs://{{ ambari_namespace }}:8020/{{ ranger_database }}/audit"'
+  #     - '"xasecure.audit.destination.solr": "true"'
+  #     - '"xasecure.audit.destination.solr.zookeepers": "{{ groups["master"][0] }}:2181,{{ groups["master"][1] }}:2181,{{ groups["master"][2] }}:2181/infra-solr"'
+  # 
+  # "ranger-storm-plugin-properties":
+  #   properties:
+  #     - '"ranger-storm-plugin-enabled": "Yes"'
+  # 
+  # "ranger-storm-security":
+  #   properties:
+  #     - '"ranger.plugin.storm.policy.rest.url": "http://{{ groups["master"][0] }}:6080"'
+  #     - '"ranger.plugin.storm.policy.pollIntervalMs": "30000"'
+
+  # "ranger-storm-audit":
+  #   properties:
+  #     - '"xasecure.audit.destination.db": "false"'
+  #     - '"xasecure.audit.destination.hdfs": "true"'
+  #     - '"xasecure.audit.destination.hdfs.dir": "hdfs://{{ ambari_namespace }}:8020/{{ ranger_database }}/audit"'
+  #     - '"xasecure.audit.destination.hdfs": "false"'
+  #     - '"xasecure.audit.destination.solr": "true"'
+  #     - '"xasecure.audit.destination.solr.zookeepers": "{{ groups["master"][0] }}:2181,{{ groups["master"][1] }}:2181,{{ groups["master"][2] }}:2181/infra-solr"'
+
+  "ranger-kafka-plugin-properties":
+    properties:
+      - '"ranger-kafka-plugin-enabled": "Yes"'
+
+  "ranger-kafka-security":
+    properties:
+      - '"ranger.plugin.kafka.policy.rest.url": "http://{{ hdp_topology_components.ranger_hosts[0] }}:6080"'
+      - '"ranger.plugin.kafka.policy.pollIntervalMs": "30000"'
+    
+  "ranger-kafka-audit":
+    properties:
+      - '"xasecure.audit.destination.db": "false"'
+      - '"xasecure.audit.destination.hdfs": "true"'
+      - '"xasecure.audit.destination.hdfs.dir": "hdfs://{{ ambari_namespace }}:8020/ranger/audit"'
+      - '"xasecure.audit.destination.solr": "true"'
+      - '"xasecure.audit.destination.solr.zookeepers": "{% for zk in hdp_topology_components.zookeeper_hosts %}{{ zk }}:2181{% if not loop.last %},{% endif %}{% if loop.last %}/infra-solr{% endif %}{% endfor %}"'
+  
+  "ranger-atlas-plugin-properties":
+    properties:
+      - '"ranger-atlas-plugin-enabled": "Yes"'
+
+  "ranger-atlas-security":
+    properties:
+      - '"ranger.plugin.atlas.policy.rest.url": "http://{{ hdp_topology_components.ranger_hosts[0] }}:6080"'
+      - '"ranger.plugin.atlas.policy.pollIntervalMs": "30000"'
+    
+  "ranger-atlas-audit":
+    properties:
+      - '"xasecure.audit.destination.db": "false"'
+      - '"xasecure.audit.destination.hdfs": "true"'
+      - '"xasecure.audit.destination.hdfs.dir": "hdfs://{{ ambari_namespace }}:8020/ranger/audit"'
+      - '"xasecure.audit.destination.solr": "true"'
+      - '"xasecure.audit.destination.solr.zookeepers": "{% for zk in hdp_topology_components.zookeeper_hosts %}{{ zk }}:2181{% if not loop.last %},{% endif %}{% if loop.last %}/infra-solr{% endif %}{% endfor %}"'
+
+  "ranger-env":
+    properties:
+      - '"ranger-hdfs-plugin-enabled": "Yes"'
+      - '"ranger-hive-plugin-enabled": "Yes"'
+      - '"ranger-yarn-plugin-enabled": "Yes"'
+      - '"ranger-hbase-plugin-enabled": "Yes"'
+      - '"ranger-atlas-plugin-enabled": "Yes"'
+      # - '"ranger-nifi-plugin-enabled": "Yes"'
+      # - '"ranger-storm-plugin-enabled": "Yes"'
+      - '"ranger-kafka-plugin-enabled": "Yes"'
+      - '"admin_username": "admin"'
+      - '"admin_password": "{{ ranger_admin_password }}"'
+      - '"ranger_admin_username": "rangeradmin"'
+      - '"ranger_admin_password": "{{ ranger_admin_password }}"'
+      - '"xasecure.audit.destination.db": "false"'
+      - '"xasecure.audit.destination.hdfs": "true"'
+      - '"xasecure.audit.destination.solr": "true"'
+      - '"is_solrCloud_enabled": "true"'
+      - '"create_db_dbuser": "false"'

@@ -1,0 +1,4 @@
+---
+- name: reload ipaserver
+  service: name=ipa state=restarted
+  

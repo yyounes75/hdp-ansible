@@ -1,0 +1,70 @@
+root_password: root123
+wait: true
+openkrb_domain: dc=hdp,dc=habibiz                                  # All lowercase
+openkrb_domain_dc: hdp                                  # All lowercase. Actual DNS domain.
+openkrb_realm: HABIBIZ
+openkrb_realm_minus: habibiz                                      # All caps. Better to match domain, but not required
+openkrb_ou_users: ou=users                                  # OU name for your users
+openkrb_ou_groups: ou=groups                                # OU name for your groups
+openkrb_servers_masters:                                    # Requires one or two hosts. If two hosts are defined, HA will be enabled.
+  - master1.habibiz
+  # - worker1.habibiz
+openkrb_rootpw: test1234                                    # Masterpassword for LDAP Admin
+openkrb_master_password: test123456                         # Masterpassword for krbcontainer on ldap
+openkrb_password_hash: "{SSHA}"                             # Type hash for OpenLDAP
+openkrb_admin_principal: admin/admin@HABIBIZ                # Admin principal. Will be used for Ambari... Need to be XXXX/admin@REALM
+openkrb_admin_principal_password: admin123                  # Admin principal password
+openkrb_krb_admin_user: krbadm                              # Kerberos User to create krbcontainer and for kdc/kadmin login
+openkrb_krb_admin_password: krbadm123                       # Kerberos Password
+openkrb_sssd_admin_user: sssdadm                            # SSSD User on OpenLDAP
+openkrb_sssd_admin_password: sssdadm123                     # SSSD Password
+openkrb_hdpadm_admin_user: hdpadm                           # HDPADM User to fetch users from HDP
+openkrb_hdpadm_admin_password: hdpadm123                    # HDPADM Password
+openkrb_user_test: usertest                                 # User to add in OpenLDAP
+openkrb_user_test_password: usertest123                     # Password for the usertest
+mysql_user: root
+mysql_password: _mej7KK9orBDwMlwAAAH@_
+front_servers:
+  - master1.habibiz
+ambari_server: master1.habibiz                          # Server fqdn to deploy ambari-server and MySQL
+ambari_server_ssl: True
+ambari_server_ssl_port: 8442
+ambari_server_master_key: test12345678                         # Ambari master key to encrypt password
+ambari_server_database: ambari_db                              # Name of ambari database
+ambari_server_database_user: ambari                            # User to connect to ambari database
+ambari_server_database_user_password: HSHQI2ryqyVZLhdFpWjo                   # Password for user to connect to ambari database
+ambari_server_sattelite_repo: False
+ambari_server_satellite_hdp_repo_id: hdp-2.6.3.0-rhel-x86_64-server-7
+ambari_server_satellite_hdp_repo_name: hdp-2.6.3.0-rhel-x86_64-server-7
+ambari_server_satellite_hdputils_repo_id: hdp-utils-1.1.0.22-rhel-x86_64-server-7
+ambari_server_satellite_hdputils_repo_name: hdp-utils-1.1.0.22-rhel-x86_64-server-7
+hive_database: hive_db                                  # Name of hive database
+hive_database_user: hive                                # User to connect to hive database
+hive_database_user_password: dd1ZW89LxQdcr5BWw5zY                       # Password for user hive
+ranger_database: ranger_db                              # Name of ranger database
+ranger_database_user: ranger                            # User to connect to ranger database
+ranger_database_user_password: Ox25ec5hQswJVwd35WbZ                   # Password for user ranger
+ranger_admin_password: test12345678
+oozie_database: oozie_db                                # Name of ranger database
+oozie_database_user: oozie                              # User to connect to ranger database
+oozie_database_user_password: C7OuBAL5JxH5IKIda1Ac                     # Password for user ranger
+security_ssl_cert_folder: /home/vagrant                 # Folder that contain all certificates for nodes
+security_ssl_cacert_name: "cacert.pem"                  # Name of your CA certficate file
+security_ssl_cacert_path: /home/vagrant/cacert.pem     # Path for CA certificate file
+security_ssl_cacert_folder: /home/vagrant
+security_server_ssl_stores: /etc/security/serverKeys    # Path where the keystore and truststore will be generate
+security_keystore_password: keystore123                 # Java Keystore password
+security_truststore_password: truststore123             # Java Truststore password
+ambari_blueprint_name: dev_01                           # Name used to register blueprint on ambari-server
+ambari_namespace: dev01                              # No space, no special character
+hdp_topology_components:
+  high_availability: False
+  hdfs_namenode_hosts: [master1.habibiz,worker1.habibiz]
+  hdfs_journalnode_hosts: []
+  yarn_rm_hosts: [master1.habibiz,worker1.habibiz]
+  zookeeper_hosts: [master1.habibiz,worker1.habibiz,worker2.habibiz]
+  ranger_hosts: [master1.habibiz]
+  masters: ['']
+  admins: []
+  edges: []
+  workers: ['']

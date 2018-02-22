@@ -1,0 +1,66 @@
+---
+- name: Ensure software is installed (yum)
+  yum: name={{ item }} state=present update_cache=yes
+  with_items:
+    - cyrus-sasl
+    - cyrus-sasl-ldap
+    
+- name: Enable service saslauthd
+  systemd:
+    name: saslauthd
+    enabled: yes
+    masked: no
+    
+- name: Add lines
+  lineinfile: 
+    dest: /etc/sasl2/slapd.conf
+    create: yes
+    state: present
+    line: '{{ item }}'
+  with_items:
+    - "pwcheck_method: saslauthd"
+    - "mech_list: plain login external"
+    - "saslauthd_path: /run/saslauthd/mux"
+
+- name: Add lines
+  lineinfile: 
+    dest: /etc/sysconfig/saslauthd
+    regexp: '^MECH='
+    create: yes
+    state: present
+    line: "MECH=ldap"
+    
+- name: Add lines
+  lineinfile: 
+    dest: /etc/sysconfig/saslauthd
+    regexp: '^FLAGS='
+    create: yes
+    state: present
+    line: "FLAGS=-O /etc/saslauthd.conf"
+    
+- name: Add lines
+  lineinfile: 
+    dest: /etc/saslauthd.conf
+    create: yes
+    state: present
+    line: '{{ item }}'
+  with_items:
+    - 'ldap_servers: {{ ldap_servers }}'
+    - 'ldap_search_base: {{ ldap_search_base }}'
+    - 'ldap_filter: {{ ldap_filter }}'
+    - 'ldap_bind_dn: {{ ldap_bind_dn }}'
+    - 'ldap_password: {{ ldap_password }}'
+    
+- name: Restart services
+  systemd:
+    state: restarted
+    name: "{{item}}"
+  with_items:    
+    - slapd
+    - saslauthd
+  register: restart_{{item}}
+  until: restart_{{item}}.status.Result == "success"
+  retries: 10
+  delay: 20
+  when: wait
+    

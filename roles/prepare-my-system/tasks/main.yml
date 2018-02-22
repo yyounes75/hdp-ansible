@@ -1,0 +1,62 @@
+---
+# - name: Change root password
+#   user:
+#     name=root
+#     password={{ root_password }}
+# - name: Allow root SSH access
+#   lineinfile: dest=/etc/ssh/sshd_config
+#               regexp="^#PermitRootLogin"
+#               line="PermitRootLogin yes"
+#               state=present
+# - name: Allow root SSH access
+#   lineinfile: dest=/etc/ssh/sshd_config
+#               regexp="^PasswordAuthentication"
+#               line="PasswordAuthentication yes"
+#               state=present
+# - name: Allow root SSH access
+#   lineinfile: dest=/etc/ssh/sshd_config
+#               regexp="^#PubkeyAuthentication"
+#               line="PubkeyAuthentication yes"
+#               state=present
+# - name: Set authorized key took from file
+#   authorized_key:
+#     user: root
+#     state: present
+#     key: "{{ lookup('file', '/home/madoff/.ssh/id_ed25519.pub') }}"
+# - name: Restart ssh
+#   service: name=sshd state=restarted
+  
+- name: Copy certs
+  copy:
+    src: "{{ item }}"
+    dest: "{{ security_ssl_cert_folder }}"
+  with_fileglob:
+    - files/cert/*.pem
+    
+- name: Copy repo ambari
+  copy: src=files/ambari.repo dest=/etc/yum.repos.d/
+
+- name: Copy repo hdp
+  copy: src=files/hdp.repo dest=/etc/yum.repos.d/
+
+- name: Update /etc/hosts from inventory with ip = ansible_ssh_host on my hosts file
+  lineinfile: dest=/etc/hosts regexp='.*{{item}}$' line='{{hostvars[item].ansible_ssh_host}} {{item}}' state=present
+  with_items: '{{groups.all}}'
+  tags:
+    - hosts
+- name: Remove 127.0.0.1 "hostname" from /etc/hosts
+  lineinfile:
+    dest=/etc/hosts
+    regexp='127\.0\.0\.1	{{ inventory_hostname }}'
+    state=absent
+    
+- name: Required packages
+  yum: name={{item}} state=installed
+  with_items:
+    - wget
+    - epel-release
+- name: Download repos MySQL
+  shell: wget http://dev.mysql.com/get/mysql57-community-release-el7-11.noarch.rpm -P /tmp/
+- name: Install repos MySQL
+  shell: rpm -ivh /tmp/mysql57-community-release-el7-11.noarch.rpm && yum clean all
+  ignore_errors: True

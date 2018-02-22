@@ -1,0 +1,17 @@
+dn: {{ openkrb_domain }}
+dc: {{ openkrb_domain_dc }}
+objectClass: top
+objectClass: domain
+
+dn: cn=ldapadm,{{ openkrb_domain }}
+objectClass: organizationalRole
+cn: ldapadm
+description: LDAP Manager
+
+dn: {{ openkrb_ou_users }},{{ openkrb_domain }}
+objectClass: organizationalUnit
+ou: Users
+
+dn: {{ openkrb_ou_groups }},{{ openkrb_domain }}
+objectClass: organizationalUnit
+ou: Groups

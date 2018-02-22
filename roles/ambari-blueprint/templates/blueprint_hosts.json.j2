@@ -1,0 +1,19 @@
+{
+   "blueprint": "{{ ambari_blueprint_name }}",
+   {% if ambari_server_sattelite_repo == True %}"repository_version_id": 1,{% endif %}
+   "default_password": "admin",
+   "host_groups": [
+      {% for hosts in groups.all %}
+      {
+         "name": "{{ hosts }}",
+         "hosts": [
+            {
+               "fqdn": "{{ hosts }}"
+            }
+         ]
+      }{% if not loop.last %},
+      {% endif %}
+    {% endfor %}
+   ]
+}
+

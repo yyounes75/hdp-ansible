@@ -1,0 +1,377 @@
+{
+   "configurations": [
+     {
+        "hive-env": {
+           "properties_attributes": {},
+           "properties": {
+              "hive_database": "Existing MySQL / MariaDB Database",
+              "hive_database_name": "hive_db",
+              "hive_database_type": "mysql",
+              "hive_ambari_database": "MySQL",
+              "javax.jdo.option.ConnectionURL": "jdbc:mysql://master1.habibiz/hive_db?createDatabaseIfNotExist=true"
+           }
+        }
+     },
+     {
+       "hive-site" : {
+       "properties" : {
+            "javax.jdo.option.ConnectionURL" : "jdbc:mysql://master1.habibiz/hive_db",
+            "javax.jdo.option.ConnectionUserName" : "hive",
+            "javax.jdo.option.ConnectionPassword" : "hive"
+                      }
+                    }
+      },
+     {
+        "core-site": {
+           "properties": {
+              "fs.defaultFS": "hdfs://dev01",
+              "ha.zookeeper.quorum": "master1.habibiz:2181,master2.habibiz:2181,master3.habibiz:2181"
+           }
+        }
+     },
+       {
+     "yarn-site": {
+      "properties": {
+              "hadoop.registry.zk.quorum": "master2.habibiz:2181,master1.habibiz:2181,master3.habibiz:2181",
+              "yarn.resourcemanager.recovery.enabled": "true",
+              "yarn.resourcemanager.store.class" : "org.apache.hadoop.yarn.server.resourcemanager.recovery.ZKRMStateStore",
+              "yarn.resourcemanager.cluster-id" : "yarn-cluster",
+              "yarn.resourcemanager.ha.enabled" : "true",
+              "yarn.resourcemanager.ha.automatic-failover.zk-base-path" : "/yarn-leader-election",
+              "yarn.resourcemanager.ha.rm-ids" : "rm1,rm2",
+              "yarn.resourcemanager.address": "master1.habibiz:8050",
+              "yarn.resourcemanager.scheduler.address": "master1.habibiz:8030",
+              "yarn.resourcemanager.resource-tracker.address": "master1.habibiz:8025",
+              "yarn.resourcemanager.admin.address": "master1.habibiz:8141",
+              "yarn.resourcemanager.hostname": "master1.habibiz:8088",
+              "yarn.resourcemanager.hostname.rm1": "master1.habibiz",
+              "yarn.resourcemanager.hostname.rm2": "master2.habibiz",
+              "yarn.resourcemanager.webapp.address": "master1.habibiz:8088",
+              "yarn.resourcemanager.webapp.address.rm1": "master1.habibiz:8088",
+              "yarn.resourcemanager.webapp.address.rm2": "master2.habibiz:8088",
+              "yarn.resourcemanager.webapp.https.address": "master1.habibiz:8090",
+              "yarn.resourcemanager.webapp.https.address.rm1": "master1.habibiz:8090",
+              "yarn.resourcemanager.webapp.https.address.rm2": "master2.habibiz:8090",
+              "yarn.resourcemanager.zk-address": "master2.habibiz:2181,master1.habibiz:2181,master3.habibiz:2181",
+              "yarn.acl.enable" : "true",
+              "yarn.client.nodemanager-connect.retry-interval-ms" : "10000"
+                    }
+                  }
+      },
+     {
+        "hdfs-site": {
+           "properties": {
+              "dfs.client.failover.proxy.provider.dev01": "org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider",
+              "dfs.ha.automatic-failover.enabled": "true",
+              "dfs.ha.fencing.methods": "shell(/bin/true)",
+              "dfs.ha.namenodes.dev01": "nn1,nn2",
+              "dfs.namenode.http-address": "master1.habibiz:50070",
+              "dfs.namenode.http-address.dev01.nn1": "master1.habibiz:50070",
+              "dfs.namenode.http-address.dev01.nn2": "master3.habibiz:50070",
+              "dfs.namenode.https-address": "master1.habibiz:50470",
+              "dfs.namenode.https-address.dev01.nn1": "master1.habibiz:50470",
+              "dfs.namenode.https-address.dev01.nn2": "master3.habibiz:50470",
+              "dfs.namenode.rpc-address.dev01.nn1": "master1.habibiz:8020",
+              "dfs.namenode.rpc-address.dev01.nn2": "master3.habibiz:8020",
+              "dfs.namenode.shared.edits.dir": "qjournal://master1.habibiz:8485;master2.habibiz:8485;master3.habibiz:8485/dev01",
+              "dfs.nameservices": "dev01"
+           }
+        }
+     }
+   ],
+   "host_groups": [
+      {
+         "name": "master1.habibiz",
+         "components": [
+            {
+               "name": "METRICS_COLLECTOR"
+            },
+            {
+               "name": "KAFKA_BROKER"
+            },
+            {
+               "name": "APP_TIMELINE_SERVER"
+            },
+            {
+               "name": "NAMENODE"
+            },
+            {
+               "name": "METRICS_MONITOR"
+            },
+            {
+               "name": "HDFS_CLIENT"
+            },
+            {
+               "name": "ZOOKEEPER_SERVER"
+            },
+            {
+               "name": "TEZ_CLIENT"
+            },
+            {
+               "name": "LOGSEARCH_LOGFEEDER"
+            },
+            {
+               "name": "HBASE_MASTER"
+            },
+            {
+               "name": "JOURNALNODE"
+            },
+            {
+               "name": "RESOURCEMANAGER"
+            },
+            {
+               "name": "ZKFC"
+            },
+            {
+               "name": "HIVE_METASTORE"
+            }
+         ],
+         "cardinality": "1"
+      },
+         {
+            "name": "master2.habibiz",
+            "components": [
+               {
+                  "name": "KAFKA_BROKER"
+               },
+               {
+                  "name": "METRICS_MONITOR"
+               },
+               {
+                  "name": "HDFS_CLIENT"
+               },
+               {
+                  "name": "ZOOKEEPER_SERVER"
+               },
+               {
+                  "name": "TEZ_CLIENT"
+               },
+               {
+                  "name": "LOGSEARCH_LOGFEEDER"
+               },
+               {
+                  "name": "HBASE_MASTER"
+               },
+               {
+                  "name": "JOURNALNODE"
+               }
+            ],
+            "cardinality": "1"
+         },
+            {
+               "name": "master3.habibiz",
+               "components": [
+                  {
+                     "name": "KAFKA_BROKER"
+                  },
+                  {
+                     "name": "NAMENODE"
+                  },
+                  {
+                     "name": "METRICS_MONITOR"
+                  },
+                  {
+                     "name": "HDFS_CLIENT"
+                  },
+                  {
+                     "name": "ZOOKEEPER_SERVER"
+                  },
+                  {
+                     "name": "TEZ_CLIENT"
+                  },
+                  {
+                     "name": "LOGSEARCH_LOGFEEDER"
+                  },
+                  {
+                     "name": "OOZIE_SERVER"
+                  },
+                  {
+                     "name": "RESOURCEMANAGER"
+                  },
+                  {
+                     "name": "JOURNALNODE"
+                  },
+                  {
+                     "name": "ZKFC"
+                  }
+               ],
+               "cardinality": "1"
+            },
+      {
+         "name": "front1.habibiz",
+         "components": [
+            {
+               "name": "ATLAS_CLIENT"
+            },
+            {
+               "name": "ATLAS_SERVER"
+            },
+            {
+               "name": "HBASE_CLIENT"
+            },
+            {
+               "name": "HCAT"
+            },
+            {
+               "name": "HDFS_CLIENT"
+            },
+            {
+               "name": "HIVE_CLIENT"
+            },
+            {
+               "name": "HIVE_SERVER"
+            },
+            {
+               "name": "INFRA_SOLR"
+            },
+            {
+               "name": "INFRA_SOLR_CLIENT"
+            },
+            {
+               "name": "KAFKA_BROKER"
+            },
+            {
+               "name": "KNOX_GATEWAY"
+            },
+            {
+               "name": "LOGSEARCH_LOGFEEDER"
+            },
+            {
+               "name": "LOGSEARCH_SERVER"
+            },
+            {
+               "name": "MAPREDUCE2_CLIENT"
+            },
+            {
+               "name": "METRICS_GRAFANA"
+            },
+            {
+               "name": "METRICS_MONITOR"
+            },
+            {
+               "name": "OOZIE_CLIENT"
+            },
+            {
+               "name": "PIG"
+            },
+            {
+               "name": "SLIDER"
+            },
+            {
+               "name": "SPARK_CLIENT"
+            },
+            {
+               "name": "SPARK_JOBHISTORYSERVER"
+            },
+            {
+               "name": "SPARK_THRIFTSERVER"
+            },
+            {
+               "name": "SQOOP"
+            },
+            {
+               "name": "TEZ_CLIENT"
+            },
+            {
+               "name": "WEBHCAT_SERVER"
+            },
+            {
+               "name": "YARN_CLIENT"
+            },
+            {
+               "name": "ZEPPELIN_MASTER"
+            },
+            {
+               "name": "ZOOKEEPER_CLIENT"
+            }
+         ],
+         "cardinality": "1"
+      },
+      {
+         "name": "worker1.habibiz",
+         "components": [
+         {
+            "name": "DATANODE"
+         },
+         {
+            "name": "HBASE_CLIENT"
+         },
+         {
+            "name": "HBASE_REGIONSERVER"
+         },
+         {
+            "name": "HDFS_CLIENT"
+         },
+         {
+            "name": "LOGSEARCH_LOGFEEDER"
+         },
+         {
+            "name": "METRICS_MONITOR"
+         },
+         {
+            "name": "NODEMANAGER"
+         }
+         ],
+         "cardinality": "1"
+      },
+      {
+         "name": "worker2.habibiz",
+         "components": [
+         {
+            "name": "DATANODE"
+         },
+         {
+            "name": "HBASE_CLIENT"
+         },
+         {
+            "name": "HBASE_REGIONSERVER"
+         },
+         {
+            "name": "HDFS_CLIENT"
+         },
+         {
+            "name": "LOGSEARCH_LOGFEEDER"
+         },
+         {
+            "name": "METRICS_MONITOR"
+         },
+         {
+            "name": "NODEMANAGER"
+         }
+         ],
+         "cardinality": "1"
+      },
+      {
+         "name": "worker3.habibiz",
+         "components": [
+         {
+            "name": "DATANODE"
+         },
+         {
+            "name": "HBASE_CLIENT"
+         },
+         {
+            "name": "HBASE_REGIONSERVER"
+         },
+         {
+            "name": "HDFS_CLIENT"
+         },
+         {
+            "name": "LOGSEARCH_LOGFEEDER"
+         },
+         {
+            "name": "METRICS_MONITOR"
+         },
+         {
+            "name": "NODEMANAGER"
+         }
+         ],
+         "cardinality": "1"
+      }
+   ],
+   "Blueprints": {
+      "blueprint_name": "dev_01",
+      "stack_name": "HDP",
+      "stack_version": "2.6"
+                }
+}

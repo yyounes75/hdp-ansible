@@ -1,0 +1,85 @@
+---
+- name: Check if CA cert contains a chain
+  shell: grep -c END {{ java_keystore_cacert }}
+  register: checkcacert
+
+- name: Create folder
+  file:
+    path: "{{ java_keystore_path }}"
+    state: directory
+    mode: 0755
+    owner: root
+    group: root
+
+- name: Split CA cert 
+  shell: awk 'BEGIN {c=0;} /BEGIN CERT/{c++} { print > "{{ java_keystore_path }}""ca." c ".pem"}' < "{{ java_keystore_cacert }}"
+  when: ( checkcacert.stdout | int ) > 1
+
+- name: Check if truststore.jks exists
+  stat:
+    path: "{{ java_keystore_path}}/truststore.jks"
+  register: stat_exists_truststore
+  
+- name: CA Chain - Get list of CA split
+  find:
+    paths: "{{ java_keystore_cacert_folder }}"
+    patterns: 'ca.*.pem'
+  when: ( checkcacert.stdout | int ) > 1
+  register: listcasplit
+
+- name: Clean tmp file
+  shell: cat /dev/null > /tmp/catoinsert
+  
+- name: CA Chain - Check if all CA cert are in the truststore
+  shell: > 
+    /usr/java/default/bin/keytool -list -v -keystore "{{ java_keystore_path}}/truststore.jks" -storepass {{ java_keystore_truststore_password }} |
+    grep `openssl x509 -noout -fingerprint -md5 -inform pem -in '{{ item.path }}' | awk -F"=" '{print $2}'` || echo '{{ item.path }}' >> /tmp/catoinsert
+  when: ( checkcacert.stdout | int ) > 1
+  with_items: "{{ listcasplit.files }}"
+
+- name: CA Chain - Get the file contents
+  command: cat /tmp/catoinsert
+  register: my_items
+  when: ( checkcacert.stdout | int ) > 1
+
+- name: CA Chain - Create the truststore with CA split
+  shell: /usr/java/default/bin/keytool -noprompt -import -trustcacerts -keystore "{{ java_keystore_path}}/truststore.jks" -storepass {{ java_keystore_truststore_password }} -alias ca`echo {{ item }} |grep -o -P '(?<=ca).*(?=.pem)'` -file "{{ item }}"
+  when: ( checkcacert.stdout | int ) > 1 and my_items.changed == True
+  with_items: "{{my_items.stdout_lines}}"
+
+  
+- name: Check the alias already exists in the truststore
+  shell: /usr/java/default/bin/keytool -list -v -keystore "{{ java_keystore_path}}/truststore.jks" -storepass {{ java_keystore_truststore_password }} -alias {{ java_keystore_ca_realm }}
+  when: stat_exists_truststore.stat.exists == True and ( checkcacert.stdout | int ) == 1
+  register: stat_truststore
+  
+- name: Create the truststore
+  shell: /usr/java/default/bin/keytool -noprompt -import -trustcacerts -keystore "{{ java_keystore_path}}/truststore.jks" -storepass {{ java_keystore_truststore_password }} -alias {{ java_keystore_ca_realm }} -file "{{ java_keystore_cert_folder }}/{{ java_keystore_cacert_name }}"
+  failed_when: stat_truststore == 0
+  when: ( checkcacert.stdout | int ) == 1
+  
+- name: Check if keystore.jks exists
+  stat:
+    path: "{{ java_keystore_path}}/keystore.jks"
+  register: stat_exists_keystore
+
+- name: Check the alias already exists in the keystore
+  command: /usr/java/default/bin/keytool -list -v -keystore "{{ java_keystore_path}}/keystore.jks" -storepass {{ java_keystore_keystore_password }} -alias {{ inventory_hostname }}
+  when: stat_exists_keystore.stat.exists == True
+  register: stat_keystore
+      
+- name: Import cert in pkcs12
+  command: openssl pkcs12 -export -in "{{ java_keystore_cert_folder }}/{{ inventory_hostname }}.cert.pem" -inkey "{{ java_keystore_cert_folder }}/{{ inventory_hostname }}.key.pem" -out "/tmp/pkcs12" -name {{ inventory_hostname }} -password pass:{{ java_keystore_keystore_password }}
+  failed_when: stat_keystore == 0
+  
+- name: Create the keystore
+  command: /usr/java/default/bin/keytool -noprompt -importkeystore -destkeystore {{ java_keystore_path }}/keystore.jks -deststorepass {{ java_keystore_keystore_password }} -destkeypass {{ java_keystore_path }} -srckeystore "/tmp/pkcs12" -srcstoretype PKCS12 -srcstorepass {{ java_keystore_keystore_password }} -alias {{ inventory_hostname }} 
+  failed_when: stat_keystore == 0
+
+- name: Cleaning
+  file:
+    path: '{{ item}}'
+    state: absent
+  with_items:
+    - /tmp/pkcs12
+    - /tmp/catoinsert

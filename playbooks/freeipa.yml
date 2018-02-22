@@ -1,0 +1,38 @@
+- hosts: front1.habibiz
+  user: vagrant
+  become: true
+  become_user: root
+  vars_files:
+  - vars/external_vars.yml
+  
+  roles:
+    - role: ipaserver
+      vars:
+        ipaserver_admin_password: test1234
+        ipaserver_dir_admin_password: test1234
+        ipaserver_base_command:     ipa-server-install -U
+        ipaserver_configure_ssh: True
+        ipaserver_configure_sshd: True
+        ipaserver_dns_forwarder: False
+        ipaserver_domain: habibiz       # All lowercase. Actual DNS domain.
+        ipaserver_hbac_allow: True
+        ipaserver_idstart: 5000
+        ipaserver_idmax: False
+        ipaserver_mkhomedir: True
+        ipaserver_packages:
+          - ipa-server
+          - bind
+          - bind-dyndb-ldap
+        ipaserver_realm: HABIBIZ        # All caps. Better to match domain, but not required
+        ipaserver_setup_dns: False
+        ipaserver_setup_ntp: True
+        ipaserver_ssh_trust_dns: True
+        ipaserver_ui_redirect: True
+        ipaserver_ssl_cacert_path: "/home/vagrant/cacert.pem"
+        ipaserver_ssl_cert_path: "/home/vagrant/front1.habibiz.cert.pem"
+        ipaserver_ssl_key_path: "/home/vagrant/front1.habibiz.key.pem"
+        ipaserver_ssl_directory_server: True
+        ipaserver_ssl_apache_server: True
+        ipaserver_ssl_kdc_server: false
+
+  

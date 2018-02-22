@@ -1,0 +1,330 @@
+- hosts: all
+  gather_facts: yes
+  vars_files:
+  - vars/external_vars.yml
+
+  roles:
+   - role: williamyeh.oracle-java
+     tags: prepare_system
+     vars:
+       java_version: 8
+       java_subversion: 121
+       java_install_jce: true
+       java_download_from_oracle: false
+   - role: prepare-my-system
+
+  tags:
+   - prepare_system
+
+  tasks:
+   - name: Disable firewalld
+     service: name=firewalld state=stopped enabled=no
+
+   - name: Disable SELinux
+     selinux: state=disabled
+
+   - sysctl:
+       name: vm.swappiness
+       value: 1
+       sysctl_set: yes
+       state: present
+       reload: yes
+
+   - sysctl:
+       name: vm.overcommit_memory
+       value: 1
+       sysctl_set: yes
+       state: present
+       reload: yes
+
+   - sysctl:
+       name: net.core.somaxconn
+       value: 1024
+       sysctl_set: yes
+       state: present
+       reload: yes
+
+   - sysctl:
+       name: net.ipv4.ip_local_port_range
+       value: 10000 65000
+       sysctl_set: yes
+       state: present
+       reload: yes
+
+  #    - sysctl:
+  #        name: net.ipv6.conf.all.disable_ipv6
+  #        value: 1
+  #        sysctl_set: yes
+  #        state: present
+  #        reload: yes
+  #
+  #    - sysctl:
+  #        name: net.ipv6.conf.default.disable_ipv6
+  #        value: 1
+  #        sysctl_set: yes
+  #        state: present
+  #        reload: yes
+
+   - name: Add umask
+     lineinfile: 
+       path: /etc/profile
+       line: "umask 0022"
+
+   - pam_limits:
+       domain: '*'
+       limit_type: '-'
+       limit_item: nofile
+       value: 32768
+   - pam_limits:
+       domain: '*'
+       limit_type: '-'
+       limit_item: nproc
+       value: 65536
+
+   - name: Clean DBCache
+     command: yum clean all
+
+   - name: Required packages
+     yum: name={{item}} state=installed
+     with_items:
+       - vim-common
+       - tree
+       - git
+       - nano
+       - vim
+       - bash-completion
+       - unzip
+       - net-tools
+       - wget
+
+- include: playbooks/users_hdp.yml
+  tags: create_hdp_users
+
+- hosts: "{{ openkrb_servers_masters }}"
+  gather_facts: no
+  vars_files:
+  - vars/external_vars.yml
+  roles:
+    - role: openkrb
+      tags: openkrb
+
+- hosts: all
+  gather_facts: no
+  strategy: free 
+  vars_files:
+  - vars/external_vars.yml
+
+  roles:
+  - role: java_keystore
+    tags: java_keystore
+    vars:
+      java_keystore_path: "{{ security_server_ssl_stores }}"
+      java_keystore_keystore_password: "{{ security_keystore_password }}"
+      java_keystore_truststore_password: "{{ security_truststore_password }}"
+      java_keystore_ca_realm: "{{ openkrb_realm }}"
+      java_keystore_cert_folder: "{{ security_ssl_cert_folder }}"
+      java_keystore_cacert_name: "{{ security_ssl_cacert_name }}"
+      java_keystore_cacert_folder: "{{ security_ssl_cacert_folder }}"
+      java_keystore_cacert: "{{ security_ssl_cacert_path }}"
+
+  tags:
+    - sssd
+  tasks:
+    - name: Required packages
+      yum: name={{item}} state=installed
+      with_items:
+        - openldap-clients
+        - krb5-workstation
+        - sssd
+        
+    - name: Stop nslcd
+      systemd:
+        state: stopped
+        name: "{{item}}"
+      with_items:
+        - nslcd
+        - winbind
+      ignore_errors: yes
+        
+    - name: Disable nslcd
+      systemd:
+        name: "{{item}}"
+        enabled: no
+      with_items:
+        - nslcd
+        - winbind
+      ignore_errors: yes
+    
+    - name: One Nodes
+      set_fact:
+        openkrb_servers_ha: False
+      when: ( {{ openkrb_servers_masters | length }} ) == 1
+
+    - name: Two Nodes
+      set_fact:
+        openkrb_servers_ha: True
+      when: ( {{ openkrb_servers_masters | length }} ) == 2
+
+    - name: Copy krb.conf for client
+      template: >
+        src=roles/openkrb/templates/krb_client.conf.j2
+        dest=/etc/krb5.conf
+      when: openkrb_servers_ha == False
+
+    - name: Copy sssd.conf
+      template: >
+        src=roles/openkrb/templates/sssd.conf.j2
+        dest=/tmp/sssd.conf
+      when: openkrb_servers_ha == False
+
+    - name: Copy krb.conf for client
+      template: >
+        src=roles/openkrb/templates/krb_client_ha.conf.j2
+        dest=/etc/krb5.conf
+      when: openkrb_servers_ha == True
+
+    - name: Copy sssd.conf
+      template: >
+        src=roles/openkrb/templates/sssd_ha.conf.j2
+        dest=/tmp/sssd.conf
+      when: openkrb_servers_ha == True
+      
+    - name: Copy ldap.conf for client
+      template: >
+        src=roles/openkrb/templates/ldap.conf.j2
+        dest=/etc/openldap/ldap.conf
+      # when: openkrb_servers_ha == True
+
+    - name: Copy sssd.conf to its folder
+      copy:
+        src: /tmp/sssd.conf
+        dest: /etc/sssd/
+        remote_src: yes
+        owner: root
+        group: root
+        mode: 0600
+        backup: yes
+
+    - name: Enable SSSD
+      command: authconfig --enablesssd --enablesssdauth --enablelocauthorize --enableldap --enableldaptls --update
+      when: inventory_hostname not in "{{ item }}"
+      with_items:
+        - "{{ front_servers }}"
+
+    - name: Enable SSSD
+      command: authconfig --enablesssd --enablesssdauth --enablelocauthorize --enableldap --enableldaptls --enablemkhomedir --update
+      when: inventory_hostname in "{{ item }}"
+      with_items:
+        - "{{ front_servers }}"
+
+    - name: Restart service sssd
+      systemd:
+        state: restarted
+        name: sssd
+
+    - name: Clean /tmp folder
+      shell: rm -Rf /tmp/*.ldif /tmp/*.conf /tmp/cn=config 
+
+- hosts: "{{ ambari_server }}"
+  gather_facts: no
+  vars_files:
+  - vars/external_vars.yml
+
+  roles:
+    - role: geerlingguy.mysql
+      tags: mysql
+      vars:
+        mysql_user_home: /var/lib/mysql
+        mysql_user_name: '{{ mysql_user }}'
+        mysql_user_password: '{{ mysql_password }}'
+        mysql_bind_address: '{{ inventory_hostname }}'
+        mysql_databases:
+          - name: '{{ ambari_database }}'
+          - name: '{{ hive_database }}'
+          - name: '{{ ranger_database }}'
+          - name: '{{ oozie_database }}'
+        mysql_users:
+          - name: '{{ ambari_database_user }}'
+            host: "%"
+            password: "{{ ambari_database_user_password }}"
+            priv: "{{ ambari_database }}.*:ALL"
+          - name: '{{ hive_database_user }}'
+            host: '%'
+            password: "{{ hive_database_user_password }}"
+            priv: "{{ hive_database }}.*:ALL"
+          - name: '{{ ranger_database_user }}'
+            host: '%'
+            password: "{{ ranger_database_user_password }}"
+            priv: "{{ ranger_database }}.*:ALL"
+          - name: '{{ oozie_database_user }}'
+            host: '%'
+            password: "{{ oozie_database_user_password }}"
+            priv: "{{ oozie_database }}.*:ALL"
+        mysql_innodb_large_prefix: '1'
+        mysql_innodb_file_per_table: '1'
+        mysql_innodb_file_format: 'Barracuda'
+        mysql_daemon: mysqld
+        mysql_packages:
+          - mysql-community-server
+          - mysql-community-libs
+          - MySQL-python
+          - perl-DBD-MySQL
+        mysql_log_error: /var/log/mysqld.log
+        mysql_syslog_tag: mysqld
+        mysql_pid_file: /var/run/mysqld/mysqld.pid
+        mysql_validate_password_policy: LOW
+    - role: ambari-server
+      tags: ambari_server
+      vars:
+        ambari_database: "{{ ambari_server_database }}"
+        ambari_database_user: "{{ ambari_server_database_user }}"
+        ambari_database_user_password: "{{ ambari_server_database_user_password }}"
+        ambari_ssl: "{{ ambari_server_ssl }}"
+        ambari_ssl_port: "{{ ambari_server_ssl_port }}"
+        mysql_server_hostname: "{{ ambari_server }}"
+        mysql_server_port: 3306
+        ambari_master_key: "{{ ambari_server_master_key }}"
+        ssl_cert_folder: "{{ security_ssl_cert_folder }}"
+        ssl_stores_path: "{{ security_server_ssl_stores }}"
+        truststore_password: "{{ security_truststore_password }}"
+
+- hosts: all
+  strategy: free
+  gather_facts: no
+  # serial: 30%
+  vars_files:
+  - vars/external_vars.yml
+
+  roles:
+    - role: ambari-agent
+      tags: ambari_agent
+      vars:
+        ambari_server_master: "{{ ambari_server }}"
+
+- hosts: "{{ ambari_server }}"
+  gather_facts: no
+  vars_files:
+    - vars/external_vars.yml
+
+  roles:
+    - role: ambari-blueprint
+      tags: ambari_blueprint
+
+# - hosts: "{{ ambari_server }}"
+#   gather_facts: no
+#   vars_files:
+#     - vars/external_vars.yml
+# 
+#   roles:
+#     - role: ambari-kerberos
+#       tags: ambari_kerberos
+#       vars:
+#         ambari_server_hostname: '{{ ambari_server }}'
+#         ambari_server_port: '{{ ambari_server_ssl_port }}'
+#         ambari_server_protocol: https
+#         ambari_namespace: '{{ ambari_blueprint_name }}'
+#         kdc_server: '{{ openkrb_servers_masters[0] }}'
+#         kerberos_realm: '{{ openkrb_realm }}'
+#         kerberos_principal: '{{ openkrb_admin_principal }}'
+#         kerberos_principal_password: '{{ openkrb_admin_principal_password }}'
+# 

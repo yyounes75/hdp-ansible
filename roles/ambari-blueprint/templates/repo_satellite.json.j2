@@ -1,0 +1,28 @@
+{
+  "operating_systems" : [
+    {
+      "OperatingSystems" : {
+        "ambari_managed_repositories": "false",
+        "os_type" : "redhat7",
+        "stack_name" : "HDP",
+        "stack_version" : "2.6"
+      },
+      "repositories" : [
+        {
+          "Repositories" : {
+            "base_url" : "",
+            "repo_id" : "{{ ambari_server_satellite_hdp_repo_id }}",
+            "repo_name" : "{{ ambari_server_satellite_hdp_repo_name }}"
+          }
+},
+        {
+          "Repositories" : {
+            "base_url" : "",
+            "repo_id" : "{{ ambari_server_satellite_hdputils_repo_id }}",
+            "repo_name" : "{{ ambari_server_satellite_hdputils_repo_name }}"
+          }
+        }
+     ]
+    }
+  ]
+}

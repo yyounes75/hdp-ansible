@@ -1,0 +1,382 @@
+---
+- include_vars: roles/ambari-blueprint/defaults/hdp_ha_config_components.yml
+  when: hdp_topology_components.high_availability == True
+
+- include_vars: roles/ambari-blueprint/defaults/hdp_config_components.yml
+  when: hdp_topology_components.high_availability == False
+
+- name: Init fact
+  set_fact:
+      master1_components: []
+      master2_components: []
+      master3_components: []
+      admin1_components: []
+      admin2_components: []
+      admin3_components: []
+      edge1_components: []
+      edge2_components: []
+      edge3_components: []
+      worker1_components: []
+      worker2_components: []
+      worker3_components: []
+
+
+- name: Set fact master1
+  set_fact:
+      master1_components: "{{ master1_components }} + ['{{ item if (item in hdp_one_instance_components) or (item in hdp_two_instance_components) or (item in hdp_multiple_instance_components) else None }}']"
+  with_items: 
+    - "{{ hdp_topology_components.masters }}"
+  when: ( {{ groups['master'] | length }} ) and groups['master'][0] is defined
+
+- name: Set fact master1 - HA
+  set_fact:
+    master1_components: "{{ master1_components }} + ['{{ item if groups['master'][0] in hdp_topology_components.hdfs_namenode_hosts else None }}']"
+  with_items: 
+  - "{{ hdp_two_instance_components }}"
+  when: ( {{ groups['master'] | length }} ) and groups['master'][0] is defined and hdp_topology_components.high_availability == True
+
+- name: Set fact master2
+  set_fact:
+      master2_components: "{{ master2_components }} + ['{{ item if item in hdp_multiple_instance_components else None }}']"
+  with_items: 
+    - "{{ hdp_topology_components.masters }}"
+  when: ( {{ groups['master'] | length }} ) > 1 and groups['master'][1] is defined and hdp_topology_components.high_availability == True
+
+- name: Set fact master2 - HA
+  set_fact:
+      master2_components: "{{ master2_components }} + ['{{ item if groups['master'][1] in hdp_topology_components.hdfs_namenode_hosts else None }}']"
+  with_items: 
+    - "{{ hdp_two_instance_components }}"
+  when: ( {{ groups['master'] | length }} ) > 1 and groups['master'][1] is defined and hdp_topology_components.high_availability == True
+
+- name: Set fact master3
+  set_fact:
+      master3_components: "{{ master3_components }} + ['{{ item if item in hdp_multiple_instance_components else None }}']"
+  with_items:
+    - "{{ hdp_topology_components.masters }}"
+  when: ( {{ groups['master'] | length }} ) > 2 and groups['master'][2] is defined and hdp_topology_components.high_availability == True
+
+- name: Set fact master3 - HA
+  set_fact:
+      master3_components: "{{ master3_components }} + ['{{ item if groups['master'][2] in hdp_topology_components.hdfs_namenode_hosts else None }}']"
+  with_items: 
+    - "{{ hdp_two_instance_components }}"
+  when: ( {{ groups['master'] | length }} ) > 2 and groups['master'][2] is defined and hdp_topology_components.high_availability == True
+
+- name: Set fact admin1
+  set_fact:
+      admin1_components: "{{ admin1_components | default([]) }} + ['{{ item if (item in hdp_one_instance_components) or (item in hdp_two_instance_components) or (item in hdp_multiple_instance_components) else None }}']"
+  with_items: "{{ hdp_topology_components.admins }}"
+  when: ( {{ groups['admin'] | length }} ) and groups['admin'][0] is defined
+
+- name: Set fact admin2
+  set_fact:
+      admin2_components: "{{ admin2_components | default([]) }} + ['{{ item if (item in hdp_two_instance_components) or (item in hdp_multiple_instance_components) else None }}']"
+  with_items: "{{ hdp_topology_components.admins }}"
+  when: ( {{ groups['admin'] | length }} ) > 1 and groups['admin'][1] is defined
+
+- name: Set fact admin3
+  set_fact:
+      admin3_components: "{{ admin3_components | default([]) }} + ['{{ item if item in hdp_multiple_instance_components else None }}']"
+  with_items: "{{ hdp_topology_components.admins }}"
+  when: ( {{ groups['admin'] | length }} ) > 2 and groups['admin'][2] is defined
+
+- name: Set fact edge1
+  set_fact:
+      edge1_components: "{{ edge1_components | default([]) }} + ['{{ item if (item in hdp_one_instance_components) or (item in hdp_two_instance_components) or (item in hdp_multiple_instance_components) else None }}']"
+  with_items: "{{ hdp_topology_components.edges }}"
+  when: ( {{ groups['front'] | length }} ) and groups['front'][0] is defined
+
+- name: Set fact edge2
+  set_fact:
+      edge2_components: "{{ edge2_components | default([]) }} + ['{{ item if (item in hdp_two_instance_components) or (item in hdp_multiple_instance_components) else None }}']"
+  with_items: "{{ hdp_topology_components.edges }}"
+  when: ( {{ groups['front'] | length }} ) > 1 and groups['front'][1] is defined
+
+- name: Set fact edge3
+  set_fact:
+      edge3_components: "{{ edge3_components | default([]) }} + ['{{ item if item in hdp_multiple_instance_components else None }}']"
+  with_items: "{{ hdp_topology_components.edges }}"
+  when: ( {{ groups['front'] | length }} ) > 2 and groups['front'][2] is defined
+
+- name: Set fact worker1
+  set_fact:
+      worker1_components: "{{ worker1_components | default([]) }} + ['{{ item if (item in hdp_one_instance_components) or (item in hdp_two_instance_components) or (item in hdp_multiple_instance_components) else None }}']"
+  with_items: "{{ hdp_topology_components.workers }}"
+  when: ( {{ groups['worker'] | length }} ) and groups['worker'][0] is defined
+
+- name: Set fact worker2
+  set_fact:
+      worker2_components: "{{ worker2_components | default([]) }} + ['{{ item if (item in hdp_two_instance_components) or (item in hdp_multiple_instance_components) else None }}']"
+  with_items: "{{ hdp_topology_components.workers }}"
+  when: ( {{ groups['worker'] | length }} ) > 1 and groups['worker'][1] is defined
+
+- name: Set fact worker3
+  set_fact:
+      worker3_components: "{{ worker3_components | default([]) }} + ['{{ item if item in hdp_multiple_instance_components else None }}']"
+  with_items: "{{ hdp_topology_components.workers }}"
+  when: ( {{ groups['worker'] | length }} ) > 2 and groups['worker'][2] is defined
+
+- name: Copy blueprint
+  template: >
+   src=roles/ambari-blueprint/templates/blueprint_cluster_dev.json.j2
+   dest=/tmp/blueprint_cluster.json
+  when: hdp_topology_components.high_availability == False
+
+- name: Copy blueprint
+  template: >
+   src=roles/ambari-blueprint/templates/blueprint_cluster_ap_op.json.j2
+   dest=/tmp/blueprint_cluster.json
+  when: hdp_topology_components.high_availability == True
+
+# - name: debug
+#   debug: msg="OK"
+#   when: ansible_play_batch[0] in hdp_topology_components.hdfs_namenode_hosts
+
+- name: Slurp the blueprint
+  slurp:
+   src: "/tmp/blueprint_cluster.json"
+  register: cluster_blueprint
+
+- name: Load blueprint cluster config
+  uri:
+    url: "https://{{ ambari_server }}:{{ ambari_server_ssl_port }}/api/v1/blueprints/{{ ambari_blueprint_name }}"
+    method: POST
+    force_basic_auth: yes
+    user: "admin"
+    password: "admin"
+    headers: '{"X-Requested-By":"ambari"}'
+    body: "{{ cluster_blueprint.content | b64decode | to_json }}"
+    body_format: json
+    validate_certs: no
+    status_code: 200,201,202,404
+  return_content: yes
+
+- name: Sleep
+  shell: sleep 5
+
+- name: Copy VDF repository
+  template: >
+   src=roles/ambari-blueprint/templates/repo.xml.j2
+   dest=/tmp/repo.xml
+  when: ambari_server_sattelite_repo == True
+
+- name: Load VDF repository
+  uri:
+    url: "https://{{ ambari_server }}:{{ ambari_server_ssl_port }}/api/v1/version_definitions"
+    # url: http://10.34.29.36:5555
+    method: POST
+    force_basic_auth: yes
+    user: "admin"
+    password: "admin"
+    headers: '{"X-Requested-By":"ambari", "Content-Type": "application/x-www-form-urlencoded"}'
+    body: '{{ {"VersionDefinition": {"version_url": "file:/tmp/repo.xml"}} | to_json }}'
+    body_format: json
+    validate_certs: no
+    status_code: 200,201,202,404
+  return_content: yes
+  when: ambari_server_sattelite_repo == True
+
+- name: Sleep
+  shell: sleep 5
+
+- name: Copy HDP Satellite repository
+  template: >
+   src=roles/ambari-blueprint/templates/repo_satellite.json.j2
+   dest=/tmp/repo_satellite.json
+  when: ambari_server_sattelite_repo == True
+
+- name: Slurp HDP Satellite repository
+  slurp:
+   src: "/tmp/repo_satellite.json"
+  register: cluster_hdpsatelliterepository
+  when: ambari_server_sattelite_repo == True
+
+- name: Load HDP Satellite repository
+  uri:
+    url: "https://{{ ambari_server }}:{{ ambari_server_ssl_port }}/api/v1/stacks/HDP/versions/2.6/repository_versions/1"
+    method: PUT
+    force_basic_auth: yes
+    user: "admin"
+    password: "admin"
+    headers: '{"X-Requested-By":"ambari"}'
+    body: "{{ cluster_hdpsatelliterepository.content | b64decode | to_json }}"
+    body_format: json
+    validate_certs: no
+    status_code: 200,201,202,404
+  return_content: no
+  when: ambari_server_sattelite_repo == True
+
+- name: Load blueprint hdp repos
+  uri:
+    url: "https://{{ ambari_server }}:{{ ambari_server_ssl_port }}/api/v1/stacks/HDP/versions/2.6/operating_systems/redhat7/repositories/HDP-2.6"
+    method: PUT
+    force_basic_auth: yes
+    user: "admin"
+    password: "admin"
+    headers: '{"X-Requested-By":"ambari"}'
+    body: "{{ lookup('file','templates/blueprint_repos_hdp.json.j2') | to_json }}"
+    body_format: json
+    validate_certs: no
+    status_code: 200,201,202,404
+  return_content: no
+  when: ambari_server_sattelite_repo == False
+
+- name: Sleep
+  shell: sleep 5
+
+- name: Load blueprint hdp utils repos
+  uri:
+    url: "https://{{ ambari_server }}:{{ ambari_server_ssl_port }}/api/v1/stacks/HDP/versions/2.6/operating_systems/redhat7/repositories/HDP-UTILS-1.1.0.21"
+    method: PUT
+    force_basic_auth: yes
+    user: "admin"
+    password: "admin"
+    headers: '{"X-Requested-By":"ambari"}'
+    body: "{{ lookup('file','templates/blueprint_repos_hdp_utils.json.j2') | to_json }}"
+    body_format: json
+    validate_certs: no
+    status_code: 200,201,202,404
+  return_content: no
+  when: ambari_server_sattelite_repo == False
+
+- name: Sleep
+  shell: sleep 5
+
+- name: Copy blueprint hosts
+  template: >
+    src=roles/ambari-blueprint/templates/blueprint_hosts.json.j2
+    dest=/tmp/blueprint_hosts.json
+
+- name: Slurp the blueprint hosts
+  slurp:
+    src: "/tmp/blueprint_hosts.json"
+  register: cluster_blueprint_hosts
+
+- name: Load blueprint hosts
+  uri:
+    url: "https://{{ ambari_server }}:{{ ambari_server_ssl_port }}/api/v1/clusters/{{ ambari_blueprint_name }}"
+    method: POST
+    force_basic_auth: yes
+    user: "admin"
+    password: "admin"
+    headers: '{"X-Requested-By":"ambari"}'
+    body: "{{ cluster_blueprint_hosts.content | b64decode | to_json }}"
+    body_format: json
+    validate_certs: no
+    status_code: 200,201,202,404
+    return_content: yes
+  register: cluster_create_task
+
+- name: Wait for the cluster to be built
+  uri:
+    url: "{{ (cluster_create_task.content|from_json).href }}"
+    method: GET
+    force_basic_auth: yes
+    user: "admin"
+    password: "admin"
+    headers: '{"X-Requested-By":"ambari", "Content-Type":"application/json"}'
+    status_code: 200,201,202
+    validate_certs: no
+    return_content: yes
+  register: cluster_check_task
+  until: (((cluster_check_task.content|from_json).Requests.request_status == 'COMPLETED' and (cluster_check_task.content|from_json).Requests.completed_task_count|int > 0) or 
+          (cluster_check_task.content|from_json).Requests.request_status == 'FAILED' or 
+          (cluster_check_task.content|from_json).Requests.request_status == 'TIMEDOUT' or 
+          (cluster_check_task.content|from_json).Requests.request_status == 'ABORTED')
+  retries: "{{ wait_timeout // 10 }}"
+  delay: 60
+  when: wait and ((cluster_create_task.content|from_json).Requests.status == 'Accepted')
+    
+- name: Stop all services
+  uri:
+    url: "https://{{ ambari_server }}:{{ ambari_server_ssl_port }}/api/v1/clusters/{{ ambari_blueprint_name }}/services"
+    method: PUT
+    force_basic_auth: yes
+    user: "admin"
+    password: "admin"
+    headers: '{"X-Requested-By":"ambari", "Content-Type": "application/x-www-form-urlencoded"}'
+    body: '{"RequestInfo":{"context":"_PARSE_.STOP.ALL_SERVICES","operation_level":{"level":"CLUSTER","cluster_name":"{{ ambari_blueprint_name }}"}},"Body":{"ServiceInfo":{"state":"INSTALLED"}}}'
+    body_format: json
+    validate_certs: no
+    return_content: yes
+  register: check_stop_all_services
+  until: check_stop_all_services.status == 200 or check_stop_all_services.status == 201 or check_stop_all_services.status == 202
+  retries: "{{ wait_timeout // 10 }}"
+  delay: 60
+  when: wait
+  failed_when: (check_stop_all_services.status == '500')
+    
+- name: Wait for all services to be stopped
+  uri:
+    url: "{{ (check_stop_all_services.content|from_json).href }}"
+    method: GET
+    force_basic_auth: yes
+    user: "admin"
+    password: "admin"
+    headers: '{"X-Requested-By":"ambari", "Content-Type":"application/json"}'
+    status_code: 200,201,202
+    validate_certs: no
+    return_content: yes
+  register: cluster_check_task_stop_services
+  until: (((cluster_check_task_stop_services.content|from_json).Requests.request_status == 'COMPLETED' and (cluster_check_task_stop_services.content|from_json).Requests.completed_task_count|int > 0) or
+        (cluster_check_task_stop_services.content|from_json).Requests.request_status == 'FAILED' or
+        (cluster_check_task_stop_services.content|from_json).Requests.request_status == 'TIMEDOUT' or
+        (cluster_check_task_stop_services.content|from_json).Requests.request_status == 'ABORTED')
+  retries: "{{ wait_timeout // 10 }}"
+  delay: 10
+  when: wait and check_stop_all_services is defined and (check_stop_all_services.content) != ""
+
+- name: Fail if the stop all services is in an error state
+  fail:
+    msg: "Failed to stop all services of the {{ ambari_blueprint_name }} cluster. Task Status is {{ (cluster_check_task_stop_services.content|from_json).Requests.request_status }}."
+  when: wait and (check_stop_all_services.content) != "" and ((cluster_check_task_stop_services.content|from_json).Requests.request_status == 'FAILED' or
+      (cluster_check_task_stop_services.content|from_json).Requests.request_status == 'TIMEDOUT' or
+      (cluster_check_task_stop_services.content|from_json).Requests.request_status == 'ABORTED')
+
+- name: Start all services
+  uri:
+    url: "https://{{ ambari_server }}:{{ ambari_server_ssl_port }}/api/v1/clusters/{{ ambari_blueprint_name }}/services"
+    method: PUT
+    force_basic_auth: yes
+    user: "admin"
+    password: "admin"
+    headers: '{"X-Requested-By":"ambari", "Content-Type": "application/x-www-form-urlencoded"}'
+    body: '{"RequestInfo":{"context":"_PARSE_.STOP.ALL_SERVICES","operation_level":{"level":"CLUSTER","cluster_name":"{{ ambari_blueprint_name }}"}},"Body":{"ServiceInfo":{"state":"STARTED"}}}'
+    body_format: json
+    validate_certs: no
+    status_code: 200,201,202
+    return_content: yes
+  register: check_start_all_services
+  until: check_start_all_services.status == 200 or check_start_all_services.status == 201 or check_start_all_services.status == 202
+  retries: "{{ wait_timeout // 10 }}"
+  delay: 60
+  when: wait
+  failed_when: (check_start_all_services.status == '500')
+
+- name: Wait for all services to be started
+  uri:
+    url: "{{ (check_start_all_services.content|from_json).href }}"
+    method: GET
+    force_basic_auth: yes
+    user: "admin"
+    password: "admin"
+    headers: '{"X-Requested-By":"ambari", "Content-Type":"application/json"}'
+    status_code: 200,201,202
+    validate_certs: no
+    return_content: yes
+  register: cluster_check_task_start_services
+  until: (((cluster_check_task_start_services.content|from_json).Requests.request_status == 'COMPLETED' and (cluster_check_task_start_services.content|from_json).Requests.completed_task_count|int > 0) or
+          (cluster_check_task_start_services.content|from_json).Requests.request_status == 'FAILED' or
+          (cluster_check_task_start_services.content|from_json).Requests.request_status == 'TIMEDOUT' or
+          (cluster_check_task_start_services.content|from_json).Requests.request_status == 'ABORTED')
+  retries: "{{ wait_timeout // 10 }}"
+  delay: 10
+  when: wait and check_start_all_services is defined and check_start_all_services and (check_start_all_services.content) != ""
+
+- name: Fail if the start all services is in an error state
+  fail:
+    msg: "Failed to start all services of the {{ ambari_blueprint_name }} cluster. Task Status is {{ (cluster_check_task_start_services.content|from_json).Requests.request_status }}."
+  when: wait and check_start_all_services and (check_start_all_services.content) != "" and ((cluster_check_task_start_services.content|from_json).Requests.request_status == 'FAILED' or
+        (cluster_check_task_start_services.content|from_json).Requests.request_status == 'TIMEDOUT' or
+        (cluster_check_task_start_services.content|from_json).Requests.request_status == 'ABORTED')

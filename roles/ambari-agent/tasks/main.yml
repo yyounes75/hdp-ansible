@@ -1,0 +1,24 @@
+---
+- name: Install ambari-agent
+  yum:
+    name={{item}}
+    state=installed
+    update_cache=yes
+  with_items:
+    - ambari-agent
+    - wget
+- name: Modify conf ambari-agent
+  lineinfile:
+    path: /etc/ambari-agent/conf/ambari-agent.ini
+    regexp: '^hostname='
+    line: 'hostname={{ ambari_server_master }}'
+- name: Restart service Ambari-agent
+  systemd:
+    state: restarted
+    name: ambari-agent
+  register: restart_agent
+  until: restart_agent.status.Result == "success"
+  retries: 10
+  delay: 20
+  when: wait
+    

@@ -1,0 +1,580 @@
+---
+- name: One Nodes
+  set_fact:
+    openkrb_servers_ha: False
+  when: ( {{ ansible_play_batch | length }} ) == 1
+  
+- name: Two Nodes
+  set_fact:
+    openkrb_servers_ha: True
+  when: ( {{ ansible_play_batch | length }} ) == 2
+  
+- name: Validate Number of Nodes
+  fail: msg="Error with number of nodes. Need 1 or 2 nodes"
+  when: ( {{ ansible_play_batch | length }} ) > 2
+
+- name: Ensure software is installed (yum)
+  yum: name={{ item }} state=present update_cache=yes
+  with_items: "{{ openkrb_packages }}"
+  
+- name: Enable service slapd
+  systemd:
+    name: slapd
+    enabled: yes
+    masked: no
+
+- name: Fill /etc/hosts
+  lineinfile: dest=/etc/hosts regexp='.*{{item}}$' line='{{hostvars[item].ansible_ssh_host}} {{item}}' state=present
+  with_items: '{{groups.all}}'
+  tags:
+    - hosts
+
+- name: Make sure slapd is running
+  systemd: state=started name=slapd
+
+- name: Get certs names to copy
+  command: find {{ security_ssl_cert_folder }} -type f -name "*.pem"
+  register: files_to_copy
+
+- name: Copy certs on ldap folder
+  copy:
+    src: "{{ item }}" 
+    dest: "/etc/openldap/certs/"
+    owner: ldap
+    group: ldap
+    remote_src: True
+    mode: 0644
+  with_items:
+  - "{{ files_to_copy.stdout_lines }}"
+ 
+- name: Copy certs on ldap folder
+  copy:
+    src: "{{ security_ssl_cacert_path }}" 
+    dest: "/etc/openldap/certs/"
+    owner: ldap
+    group: ldap
+    remote_src: True
+    mode: 0644
+
+- name: Hash OpenLDAP rootpw
+  command: slappasswd -h {{ openkrb_password_hash }} -s {{ openkrb_rootpw }}
+  register: rootpw
+  
+- name: Copy DB ldif
+  template: >
+    src=db.ldif.j2
+    dest=/tmp/db.ldif
+    
+- name: Copy MONITOR ldif
+  template: >
+    src=monitor.ldif.j2
+    dest=/tmp/monitor.ldif
+      
+- name: Copy SSL ldif
+  template: >
+    src=ssl.ldif.j2
+    dest=/tmp/ssl.ldif
+      
+- name: Copy BASE ldif
+  template: >
+    src=base.ldif.j2
+    dest=/tmp/base.ldif
+      
+- name: Copy USER ldif
+  template: >
+    src=myuser.ldif.j2
+    dest=/tmp/myuser.ldif
+      
+- name: Copy LOGLEVEL ldif
+  template: >
+    src=loglevel.ldif.j2
+    dest=/tmp/loglevel.ldif
+
+- name: Copy DB_CONFIG
+  copy:
+    src: /usr/share/openldap-servers/DB_CONFIG.example
+    dest: /var/lib/ldap/DB_CONFIG
+    owner: ldap
+    group: ldap
+    remote_src: True
+    mode: 0644
+
+- name: Inject DB.ldif to openldap
+  command: ldapmodify -Y EXTERNAL  -H ldapi:/// -f /tmp/db.ldif
+
+- name: Inject MONITOR.ldif to openldap
+  command: ldapmodify -Y EXTERNAL  -H ldapi:/// -f /tmp/monitor.ldif
+    
+- name: Inject SSL.ldif to openldap
+  command: ldapmodify -Y EXTERNAL  -H ldapi:/// -f /tmp/ssl.ldif
+  
+- name: Check if LOGLEVEL already set
+  command: ldapsearch -Y EXTERNAL  -H ldapi:/// -b "cn=config" -s sub "objectclass=*" 
+  register: checkloglevel
+  check_mode: no
+  ignore_errors: True
+  changed_when: False
+    
+- name: Inject LOGLEVEL.ldif to openldap
+  command: ldapmodify -Y EXTERNAL  -H ldapi:/// -f /tmp/loglevel.ldif
+  failed_when: checkloglevel.stdout.find("olcLoglevel") == 0
+  
+- name: Check if cosine schema already exists
+  command: ldapsearch -Y EXTERNAL  -H ldapi:/// -b "cn=schema,cn=config" -s sub "objectclass=*"
+  register: checkcosine
+  # check_mode: no
+  ignore_errors: True
+  changed_when: False
+    
+- name: Inject cosine.ldif to openldap
+  command: ldapadd -Y EXTERNAL  -H ldapi:/// -f /etc/openldap/schema/cosine.ldif
+  failed_when: checkcosine.stdout.find("cosine,cn=schema,cn=config") == 0
+  
+- name: Check if nis schema already exists
+  command: ldapsearch -Y EXTERNAL  -H ldapi:/// -b "cn=schema,cn=config" -s sub "objectclass=*"
+  register: checknis
+  check_mode: no
+  ignore_errors: True
+  changed_when: False
+          
+- name: Inject nis.ldif to openldap
+  command: ldapadd -Y EXTERNAL  -H ldapi:/// -f /etc/openldap/schema/nis.ldif
+  failed_when: checknis.stdout.find("nis,cn=schema,cn=config") == 0
+  
+- name: Check if inetorgperson schema already exists
+  command: echo `ldapsearch -Y EXTERNAL  -H ldapi:/// -b "cn=schema,cn=config" -s sub "objectclass=*"`
+  register: checkinetorgperson
+  check_mode: no
+  ignore_errors: True
+  changed_when: False
+  
+- name: Inject inetorgperson.ldif to openldap
+  command: ldapadd -Y EXTERNAL  -H ldapi:/// -f /etc/openldap/schema/inetorgperson.ldif
+  failed_when: checkinetorgperson.stdout.find("inetorgperson,cn=schema,cn=config") == 0
+  
+- name: Check if base schema already exists
+  command: echo `ldapsearch -Y EXTERNAL  -H ldapi:/// -b "cn=schema,cn=config" -s sub "objectclass=*"`
+  register: checkbase
+  check_mode: no
+  ignore_errors: True
+  changed_when: False
+  
+- name: Inject base.ldif to openldap
+  command: ldapadd -x -w {{ openkrb_rootpw }} -D "cn=ldapadm,{{ openkrb_domain }}" -f /tmp/base.ldif
+  failed_when: checkbase.stdout.find("base,cn=schema,cn=config") == 0
+  
+- name: Check whether /etc/sysconfig/slapd contains "ldaps:///"
+  command: cat /etc/sysconfig/slapd
+  register: checkldaps
+  check_mode: no
+  ignore_errors: True
+  changed_when: False
+
+- name: Enable LDAPS 1
+  lineinfile:
+    path: /etc/sysconfig/slapd
+    regexp: '^SLAPD_URLS='
+    line: 'SLAPD_URLS="ldapi:/// ldap:/// ldaps:///"'
+    state: present
+- name: Enable LDAPS 2
+  lineinfile:
+    path: /etc/sysconfig/slapd
+    regexp: '^SLAPD_LDAPS='
+    line: 'SLAPD_LDAPS=yes'
+    state: present
+- name: Enable LDAPS 3
+  lineinfile:
+    path: /etc/openldap/ldap.conf
+    regexp: '^TLS_CACERT'
+    line: 'TLS_CACERT /etc/openldap/certs/{{ security_ssl_cacert_name }}'
+    state: present
+  
+- name: Check if the user {{ openkrb_user_test }} exists
+  command: echo `ldapsearch -Y EXTERNAL  -H ldapi:/// -b "{{ openkrb_ou_users }},{{ openkrb_domain }}" -s sub "objectclass=*"`
+  register: checkuser
+  check_mode: no
+  ignore_errors: True
+  changed_when: False
+
+- name: Create user {{ openkrb_user_test }}
+  command: ldapadd -x -w {{ openkrb_rootpw }} -D "cn=ldapadm,{{ openkrb_domain }}" -f /tmp/myuser.ldif
+  failed_when: checkuser.stdout.find("{{ openkrb_user_test }}") == 0
+  
+- name: Change test user password
+  command: ldappasswd -s {{ openkrb_user_test_password }} -w {{ openkrb_rootpw }} -D "cn=ldapadm,{{ openkrb_domain }}" -x "uid={{ openkrb_user_test }},{{ openkrb_ou_users }},{{ openkrb_domain }}"
+  failed_when: checkuser.rc != 0
+
+- name: Check if system log is enabled
+  command: cat /etc/rsyslog.conf
+  register: checklogsystem
+  check_mode: no
+  ignore_errors: True
+  changed_when: False
+
+- name: Enable system log
+  shell: echo 'local4.*   /var/log/ldap.log' >> /etc/rsyslog.conf
+  failed_when: checklogsystem.stdout.find("/var/log/ldap.log") == 0
+  
+- name: Restart service rsyslog
+  systemd:
+    state: restarted
+    name: rsyslog
+  register: restart_rsyslog
+  until: restart_rsyslog.status.Result == "success"
+  retries: 10
+  delay: 20
+  when: wait
+    
+  
+- name: Restart service slapd
+  systemd:
+    state: restarted
+    name: slapd
+  register: restart_slapd
+  until: restart_slapd.status.Result == "success"
+  retries: 10
+  delay: 20
+  when: wait
+    
+    
+## Enable Multi Master
+- name: Copy SYNCPROV_MOD ldif
+  template: >
+    src=syncprov_mod.ldif.j2
+    dest=/tmp/syncprov_mod.ldif
+  when: openkrb_servers_ha == True
+  
+- name: Check if syncprov_mod already exists
+  shell: echo `ldapsearch -Y EXTERNAL -H ldapi:/// -b "cn=module,cn=config" -s sub "objectclass=*"`
+  register: checksyncprovmod
+  check_mode: no
+  ignore_errors: True
+  changed_when: False
+  
+- name: Deploy syncprov_mod
+  command: ldapadd -Y EXTERNAL -H ldapi:/// -f /tmp/syncprov_mod.ldif
+  failed_when: checksyncprovmod.stdout.find("syncprov.la") == 0 and openkrb_servers_ha == False
+
+- name: Copy SYNCPROV ldif
+  template: >
+    src=syncprov.ldif.j2
+    dest=/tmp/syncprov.ldif
+  when: openkrb_servers_ha == True
+
+- name: Check if syncprov already exists
+  command: ldapsearch -Y EXTERNAL -H ldapi:/// -b "cn=config" -s sub "objectclass=*"
+  register: checksyncprov
+  check_mode: no
+  ignore_errors: True
+  changed_when: False
+  
+- name: Deploy syncprov
+  command: ldapadd -Y EXTERNAL -H ldapi:/// -f /tmp/syncprov.ldif
+  when: checksyncprov.stdout.find("syncprov,olcDatabase={2}hdb,cn=config") == -1 and openkrb_servers_ha == True
+
+- name: Copy RP.ldif
+  template: >
+    src=rp.ldif.j2
+    dest=/tmp/rp.ldif
+  when: openkrb_servers_ha == True
+
+- name: Check if rp already exists
+  command: echo `ldapsearch -Y EXTERNAL -H ldapi:/// -b "cn=config" -s sub "objectclass=*"`
+  register: checkrp
+  check_mode: no
+  ignore_errors: True
+  changed_when: False
+  
+- name: Deploy rp
+  command: ldapmodify -Y EXTERNAL -H ldapi:/// -f /tmp/rp.ldif
+  failed_when: checkrp.stdout.find("olcSyncRepl") == 0 and openkrb_servers_ha == False
+  
+- name: Restart service slapd
+  systemd:
+    state: restarted
+    name: slapd
+  register: restart_slapd
+  until: restart_slapd.status.Result == "success"
+  retries: 10
+  delay: 20    
+  when: openkrb_servers_ha == True
+
+## Enable Kerberos
+
+- name: Enable service krb5kdc
+  systemd:
+    name: krb5kdc
+    enabled: yes
+    masked: no
+  
+- name: Enable service kadmin
+  systemd:
+    name: kadmin
+    enabled: yes
+    masked: no
+    
+- name: Get folder name to copy
+  command: find /usr/share/doc -type d -name "krb5-server-ldap*"
+  register: folder_krb
+
+- name: Copy kerberos.schema to openldap folder
+  copy:
+    src: "{{ item }}/kerberos.schema" 
+    dest: "/etc/openldap/schema/"
+    remote_src: True
+    mode: 0444
+  with_items:
+  - "{{ folder_krb.stdout_lines }}"
+  
+- name: Copy schema_convert.conf
+  template: >
+    src=schema_convert.conf.j2
+    dest=/tmp/schema_convert.conf
+    
+- name: Check if kerberos schema already exists
+  command: echo `ldapsearch -Y EXTERNAL  -H ldapi:/// -b "cn=schema,cn=config" -s sub "objectclass=*"`
+  register: checkkrbschema
+  check_mode: no
+  ignore_errors: True
+  changed_when: False
+  
+- name: Convert schema kerberos
+  shell: slapcat -f /tmp/schema_convert.conf -F /tmp/ -n0 -s "cn={12}kerberos,cn=schema,cn=config" > /tmp/cn=kerberos.ldif
+  failed_when: checkkrbschema.stdout.find("kerberos,cn=schema,cn=config") == 0
+
+- name: Check if kerberos.ldif is not clean
+  command: cat /tmp/cn=kerberos.ldif
+  register: checkkrbclean
+  check_mode: no
+  ignore_errors: True
+  changed_when: False
+  
+- name: Clean cn=kerberos.ldif
+  shell: head -n -8 /tmp/cn=kerberos.ldif > /tmp/cn=kerberos_clean.ldif
+  failed_when: checkkrbclean.stdout.find("modifyTimestamp") == 0
+  
+- name: Inject kerberos schema
+  shell: ldapadd -Y EXTERNAL -H ldapi:/// -f /tmp/cn=kerberos_clean.ldif
+  failed_when: checkkrbschema.stdout.find("kerberos,cn=schema,cn=config") == 0
+
+- name: Check if acl already exists
+  command: echo `ldapsearch -Y EXTERNAL  -H ldapi:/// -b "olcDatabase={2}hdb,cn=config" -s sub "objectclass=*"`
+  register: checkkrbacl
+  check_mode: no
+  ignore_errors: True
+  changed_when: False
+
+- name: Copy acl.ldif
+  template: >
+    src=acl.ldif.j2
+    dest=/tmp/acl.ldif
+
+- name: Inject acl.ldif
+  shell: ldapmodify -Y EXTERNAL -H ldapi:/// -f /tmp/acl.ldif
+  failed_when: checkkrbacl.stdout.find("olcAccess") == 0
+
+- name: Check if index krb already exists
+  command: echo `ldapsearch -Y EXTERNAL  -H ldapi:/// -b "olcDatabase={2}hdb,cn=config" -s sub "objectclass=*"`
+  register: checkkrbindex
+  check_mode: no
+  ignore_errors: True
+  changed_when: False
+
+- name: Copy dbindex.ldif
+  template: >
+    src=dbindex.ldif.j2
+    dest=/tmp/dbindex.ldif
+
+- name: Inject dbindex.ldif
+  shell: ldapmodify -Y EXTERNAL -H ldapi:/// -f /tmp/dbindex.ldif
+  failed_when: checkkrbindex.stdout.find("krbPrincipalName eq,pres,sub") == 0
+  
+- name: Copy krb.conf for server
+  template:
+    src=krb_server.conf.j2
+    dest=/var/kerberos/krb5kdc/kdc.conf
+  when: openkrb_servers_ha == False
+    
+- name: Copy krb.conf for client
+  template: >
+    src=krb_client.conf.j2
+    dest=/etc/krb5.conf
+  when: openkrb_servers_ha == False
+
+- name: Copy krb.conf for server with HA
+  template:
+    src=krb_server_ha.conf.j2
+    dest=/var/kerberos/krb5kdc/kdc.conf
+  when: openkrb_servers_ha == True
+    
+- name: Copy krb.conf for client with HA
+  template: >
+    src=krb_client_ha.conf.j2
+    dest=/etc/krb5.conf
+  when: openkrb_servers_ha == True
+
+- name: Restart service slapd
+  systemd:
+    state: restarted
+    name: slapd
+  register: restart_slapd
+  until: restart_slapd.status.Result == "success"
+  retries: 10
+  delay: 20
+  when: wait
+    
+
+### Refined ACL
+- name: Get SSHA password
+  command: slappasswd -h {{ openkrb_password_hash }} -s {{ openkrb_krb_admin_password }}
+  register: krbadminpw
+- name: Create krbadm
+  ldap_entry:
+    dn: cn={{ openkrb_krb_admin_user }},{{ openkrb_domain }}
+    objectClass:
+      - simpleSecurityObject
+      - organizationalRole
+    attributes:
+      description: Krb admin
+      userPassword: "{{ krbadminpw.stdout }}"
+    bind_dn: cn=ldapadm,{{ openkrb_domain }}
+    bind_pw: "{{ openkrb_rootpw }}"
+  when: inventory_hostname == ansible_play_batch[0]
+- name: Get SSHA password
+  command: slappasswd -h {{ openkrb_password_hash }} -s {{ openkrb_hdpadm_admin_password }}
+  register: hdpadminpw
+- name: Create hdpadm
+  ldap_entry:
+    dn: cn={{ openkrb_hdpadm_admin_user }},{{ openkrb_domain }}
+    objectClass:
+      - simpleSecurityObject
+      - organizationalRole
+    attributes:
+      description: HDP admin
+      userPassword: "{{ hdpadminpw.stdout }}"
+    bind_dn: cn=ldapadm,{{ openkrb_domain }}
+    bind_pw: "{{ openkrb_rootpw }}"
+  when: inventory_hostname == ansible_play_batch[0]
+- name: Get SSHA password
+  command: slappasswd -h {{ openkrb_password_hash }} -s {{ openkrb_sssd_admin_password }}
+  register: sssdadminpw
+- name: Create sssdadm
+  ldap_entry:
+    dn: cn={{ openkrb_sssd_admin_user }},{{ openkrb_domain }}
+    objectClass:
+      - simpleSecurityObject
+      - organizationalRole
+    attributes:
+      description: SSSD admin
+      userPassword: "{{ sssdadminpw.stdout }}"
+    bind_dn: cn=ldapadm,{{ openkrb_domain }}
+    bind_pw: "{{ openkrb_rootpw }}"
+  when: inventory_hostname == ansible_play_batch[0]
+- name: Set up the ACL
+  ldap_attr:
+    dn: olcDatabase={2}hdb,cn=config
+    name: olcAccess
+    values:
+      - >-
+        {0}to attrs=userPassword,shadowLastChange,userPKCS12
+        by self write
+        by anonymous auth
+        by * none
+      - >-
+        {1}to dn.subtree="cn=krbContainer,{{ openkrb_domain }}"
+        by dn.exact="cn={{ openkrb_krb_admin_user }},{{ openkrb_domain }}" write
+        by dn.base="gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth" read
+        by * none
+      - >-
+        {2}to dn.subtree="{{ openkrb_ou_groups }},{{ openkrb_domain }}"
+        by dn.exact="cn={{ openkrb_sssd_admin_user }},{{ openkrb_domain }}" read
+        by dn.exact="cn={{ openkrb_hdpadm_admin_user }},{{ openkrb_domain }}" read
+        by dn.children="{{ openkrb_ou_groups }},{{ openkrb_domain }}" read
+        by * none
+      - >-  
+        {3}to dn.subtree="{{ openkrb_ou_users }},{{ openkrb_domain }}"
+        by dn.exact="cn={{ openkrb_sssd_admin_user }},{{ openkrb_domain }}" read
+        by dn.exact="cn={{ openkrb_hdpadm_admin_user }},{{ openkrb_domain }}" read
+        by dn.children="{{ openkrb_ou_users }},{{ openkrb_domain }}" read
+        by * none
+    state: exact
+  
+### Deploy Krb Container on LDAP
+- name: Check if krb container already exists
+  command: echo `ldapsearch -Y EXTERNAL -H ldapi:/// -b {{ openkrb_domain }} -s sub "objectclass=*"`
+  register: checkkrbcontainer
+  check_mode: no
+  ignore_errors: True
+  changed_when: False
+  
+- name: Create krb container in openldap
+  command: kdb5_ldap_util -D cn=ldapadm,{{ openkrb_domain }} create -subtrees cn=krbContainer,{{ openkrb_domain }} -r {{ openkrb_realm }} -s -H ldaps://{{ inventory_hostname }}:636/ -w {{ openkrb_rootpw }} -P {{ openkrb_master_password }}
+  failed_when: checkkrbcontainer.stdout.find("cn=krbContainer") == 0
+  when: inventory_hostname == ansible_play_batch[0]
+
+- name: Required packages
+  yum: name={{item}} state=installed
+  with_items:
+    - vim-common
+  when: inventory_hostname == ansible_play_batch[0]
+  
+- name: Stash password to file
+  shell: echo -n "cn={{ openkrb_krb_admin_user }},{{ openkrb_domain }}#{HEX}`echo -n '{{ openkrb_krb_admin_password }}' | xxd -pu`" > /var/kerberos/krb5kdc/service.keyfile
+
+- name: Set acl
+  lineinfile:
+    path:  /var/kerberos/krb5kdc/kadm5.acl
+    regexp: 'admin@EXAMPLE.COM'
+    line: '*/admin@{{ openkrb_realm }} *'
+  
+- name: Fetch .k5 file from master1
+  fetch:
+    src: "/var/kerberos/krb5kdc/.k5.{{ openkrb_realm }}"
+    dest: files/
+    flat: yes
+  when: inventory_hostname == ansible_play_batch[0] and openkrb_servers_ha == True
+  
+- name: Copy .k5 file to master2
+  copy:
+    src: "files/.k5.{{ openkrb_realm }}"
+    dest: /var/kerberos/krb5kdc/
+  when: inventory_hostname != ansible_play_batch[0] and openkrb_servers_ha == True
+  
+- name: Restart service slapd
+  systemd:
+    state: restarted
+    name: slapd
+  register: restart_slapd
+  until: restart_slapd.status.Result == "success"
+  retries: 10
+  delay: 20
+  when: wait
+    
+- name: Restart service krb5kdc
+  systemd:
+    state: restarted
+    name: krb5kdc
+  register: restart_krb5kdc
+  until: restart_krb5kdc.status.Result == "success"
+  retries: 10
+  delay: 20
+  when: wait
+    
+- name: Restart service kadmin
+  systemd:
+    state: restarted
+    name: kadmin
+  register: restart_kadmin
+  until: restart_kadmin.status.Result == "success"
+  retries: 10
+  delay: 20
+  when: wait
+
+- name: Sleep
+  command: sleep 5
+  
+- name: Add admin principal
+  command: kadmin.local addprinc -pw {{ openkrb_admin_principal_password }} {{ openkrb_admin_principal }}
+  when: inventory_hostname == ansible_play_batch[0]
+  ignore_errors: yes
+  

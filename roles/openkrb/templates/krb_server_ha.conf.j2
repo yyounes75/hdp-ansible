@@ -1,0 +1,50 @@
+# Configuration snippets may be placed in this directory as well
+includedir /etc/krb5.conf.d/
+
+[logging]
+ default = FILE:/var/log/krb5libs.log
+ kdc = FILE:/var/log/krb5kdc.log
+ admin_server = FILE:/var/log/kadmind.log
+
+[libdefaults]
+ dns_lookup_realm = false
+ ticket_lifetime = 24h
+ renew_lifetime = 90d
+ forwardable = true
+ rdns = false
+ default_realm = {{ openkrb_realm }}
+
+[realms]
+  {{ openkrb_realm }} = {
+   {% for host in ansible_play_batch if not inventory_hostname==host %}kdc = {{ host }}{% endfor %}
+   
+   {% for host in ansible_play_batch if inventory_hostname==host %}kdc = {{ host }}{% endfor %}
+   
+   {% for host in ansible_play_batch if not inventory_hostname==host %}admin_server = {{ host }}{% endfor %}
+   
+   {% for host in ansible_play_batch if inventory_hostname==host %}admin_server = {{ host }}{% endfor %}
+   
+   default_domain = {{ openkrb_realm_minus }}
+   database_module = openldap_ldapconf
+}
+
+[domain_realm]
+.{{ openkrb_realm_minus }} = {{ openkrb_realm }}
+{{ openkrb_realm_minus }} = {{ openkrb_realm }}
+
+
+[dbdefaults]
+        ldap_kerberos_container_dn = cn=krbContainer,{{ openkrb_domain }}
+
+[dbmodules]
+        openldap_ldapconf = {
+                db_library = kldap
+                ldap_kdc_dn = "cn={{ openkrb_krb_admin_user }},{{ openkrb_domain }}"
+                ldap_kadmind_dn = "cn={{ openkrb_krb_admin_user }},{{ openkrb_domain }}"
+                ldap_kadmin_password = {{ openkrb_krb_admin_password }}
+                ldap_kdc_password = {{ openkrb_krb_admin_password }}
+                kdc_master_key = {{ openkrb_master_password }}
+                ldap_service_password_file = /var/kerberos/krb5kdc/service.keyfile
+                ldap_servers = {% for host in ansible_play_batch %}ldaps://{{ host }}:636/ {% endfor %} 
+                ldap_conns_per_server = 5
+        }

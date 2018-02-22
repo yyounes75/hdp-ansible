@@ -1,0 +1,22 @@
+dn: cn=config
+changetype: modify
+replace: olcServerID
+olcServerID: {% set i = 0 %}{% for thishost in play_hosts %}{% if inventory_hostname==thishost %}{{ i + loop.index }}{% endif %}{% endfor %}  
+
+dn: olcDatabase={2}hdb,cn=config
+changetype: modify
+replace: olcSyncRepl
+olcSyncRepl: {% set j = 0 %}{% for thishost2 in play_hosts %}{% if inventory_hostname==thishost2 %}rid=00{{ j + loop.index }}{% endif %}{% endfor %}  
+   provider={% for host in ansible_play_batch if not inventory_hostname==host %}ldaps://{{ host }}:636{% endfor %}  
+   bindmethod=simple  
+   binddn="cn=ldapadm,{{ openkrb_domain }}"  
+   credentials={{ openkrb_rootpw }}  
+   searchbase="{{ openkrb_domain }}"  
+   scope=sub  
+   schemachecking=on  
+   type=refreshAndPersist  
+   retry="30 5 300 3"  
+   interval=00:00:05:00 
+-
+replace: olcMirrorMode
+olcMirrorMode: TRUE

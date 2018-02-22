@@ -1,0 +1,66 @@
+---
+- name: Copy certs
+  copy:
+    src: "{{ item }}"
+    dest: "{{ security_ssl_cert_folder }}"
+  with_fileglob:
+    - files/cert/*.pem
+- name: Ensure software is installed (yum)
+  yum: name={{ item }} state=present
+  with_items: "{{ ipaserver_packages }}"
+  when: ansible_distribution == "CentOS" or
+        (ansible_distribution == "Fedora" and ansible_distribution_version|int <= 21)
+
+- name: Ensure software is installed (dnf)
+  dnf: name={{ item }} state=present
+  with_items: "{{ ipaserver_packages }}"
+  when: ansible_distribution == "Fedora" and ansible_distribution_version|int > 21
+  
+- name: Prepare certs - concatenate certs
+  shell: "cat {{ ipaserver_ssl_cert_path }} {{ ipaserver_ssl_cacert_path }} > /tmp/ssl.pem"
+
+- name: Prepare certs - create p12
+  shell: openssl pkcs12 -export -in /tmp/ssl.pem -inkey {{ ipaserver_ssl_key_path }} -out /tmp/ssl.p12 -name {{ ipaserver_realm }} -password pass:1234
+
+- name: Check if a config file exists
+  stat: path=/etc/ipa/default.conf
+  register: ipa_conf_stat
+
+- name: Backup previous config file
+  command: mv -f /etc/ipa/default.conf /etc/ipa/default.bck
+  when: ipa_conf_stat.stat.exists  
+
+- name: Remove previous installation of FreeIPA
+  command: ipa-server-install --uninstall -U
+
+- name: Run the installer
+  action: command
+    {{ ipaserver_base_command }} 
+    --realm {{ ipaserver_realm }} 
+    --domain {{ ipaserver_domain }} 
+    -a {{ ipaserver_admin_password }} 
+    -p {{ ipaserver_dir_admin_password }} 
+    --hostname={{ inventory_hostname }} 
+    --ip-address={{ ansible_ssh_host }} 
+    {{ '--idstart=%s' % ipaserver_idstart if ipaserver_idstart | default(False) else '' }} 
+    {{ '--idmax=%s' % ipaserver_idmax if ipaserver_idmax | default(False) else '' }} 
+    {{ '--forwarder=%s' % ipaserver_dns_forwarder if ipaserver_dns_forwarder | default(False) else '' }} 
+    {{ '--mkhomedir' if ipaserver_mkhomedir | default(True) else '' }} 
+    {{ '--setup-dns' if ipaserver_setup_dns | default(True) else '' }} 
+    {{ '--ssh-trust-dns' if ipaserver_ssh_trust_dns | default(True) else '' }} 
+    {{ '' if ipaserver_hbac_allow | default(True) else '--no_hbac_allow' }} 
+    {{ '' if ipaserver_setup_ntp | default(True) else '--no-ntp' }} 
+    {{ '' if ipaserver_configure_ssh | default(True) else '--no-ssh' }} 
+    {{ '' if ipaserver_configure_sshd | default(True) else '--no-sshd' }} 
+    {{ '' if ipaserver_ui_redirect | default(True) else '-no-ui-redirect' }}
+    --no-pkinit 
+    --dirsrv-pin "1234" 
+    --http-pin "1234"
+    --pkinit-pin "1234" 
+    {{ '--dirsrv-cert-file=/tmp/ssl.p12 --dirsrv-cert-name=%s' % ipaserver_realm if ipaserver_ssl_directory_server | default(False) else '' }} 
+    {{ '--http-cert-file=/tmp/ssl.p12 --http-cert-name=%s' % ipaserver_realm if ipaserver_ssl_apache_server | default(False) else '' }} 
+    {{ '--pkinit-cert-file=/tmp/ssl.p12 --pkinit-cert-name=%s' % ipaserver_realm if ipaserver_ssl_kdc_server | default(False) else '' }}
+    creates=/etc/ipa/default.conf 
+
+- name: Remove temp cert
+  command: rm -f /tmp/ssl.pem /tmp/ssl.p12

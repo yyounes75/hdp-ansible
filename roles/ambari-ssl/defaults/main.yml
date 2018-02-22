@@ -1,0 +1,36 @@
+ssl_conf_hdp:
+  "core-site":
+    properties:
+      - '"hadoop.rpc.protection": "authentication"'
+      - '"hadoop.ssl.require.client.cert": "false"'
+      - '"hadoop.ssl.hostname.verifier": "DEFAULT"'
+      - '"hadoop.ssl.keystores.factory.class": "org.apache.hadoop.security.ssl.FileBasedKeyStoresFactory"'
+      - '"hadoop.ssl.server.conf": "ssl-server.xml"'
+      - '"hadoop.ssl.client.conf": "ssl-client.xml"'
+
+  "hdfs-site":
+    properties:
+      - '"dfs.http.policy": "HTTPS_ONLY"'
+      - '"dfs.client.https.need-auth": "false"'
+
+  "ssl-client":
+    properties:
+      - '"ssl.client.keystore.keypassword": "{{ security_keystore_password }}"'
+      - '"ssl.client.keystore.location": "{{ security_server_ssl_stores }}/keystore.jks"'
+      - '"ssl.client.keystore.password": "{{ security_keystore_password }}"'
+      - '"ssl.client.keystore.type": "jks"'
+      - '"ssl.client.truststore.location": "{{ security_server_ssl_stores }}/truststore.jks"'
+      - '"ssl.client.truststore.password": "{{ security_truststore_password }}"'
+      - '"ssl.client.truststore.reload.interval": "10000"'
+      - '"ssl.client.truststore.type": "jks"'
+
+  "ssl-server":
+    properties:
+      - '"ssl.server.keystore.keypassword": "{{ security_keystore_password }}"'
+      - '"ssl.server.keystore.location": "{{ security_server_ssl_stores }}/keystore.jks"'
+      - '"ssl.server.keystore.password": "{{ security_keystore_password }}"'
+      - '"ssl.server.keystore.type": "jks"'
+      - '"ssl.server.truststore.location": "{{ security_server_ssl_stores }}/truststore.jks"'
+      - '"ssl.server.truststore.password": "{{ security_truststore_password }}"'
+      - '"ssl.server.truststore.reload.interval": "10000"'
+      - '"ssl.server.truststore.type": "jks"'

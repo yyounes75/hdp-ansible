@@ -1,0 +1,10 @@
+openkrb_packages:                                           # Packages needed for openkrb Don't touch
+  - openldap
+  - compat-openldap
+  - openldap-clients 
+  - openldap-servers 
+  - openldap-devel
+  - krb5-server
+  - krb5-server-ldap
+  - krb5-workstation
+  - python-ldap

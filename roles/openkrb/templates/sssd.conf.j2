@@ -1,0 +1,18 @@
+[sssd]
+config_file_version = 2
+services = nss,pam
+domains = LDAP
+
+[domain/LDAP]
+debug_level = 1
+id_provider = ldap
+auth_provider = ldap
+ldap_uri = ldaps://{{ groups['master'][0] }}
+ldap_default_bind_dn = cn={{ openkrb_sssd_admin_user }},{{ openkrb_domain }}
+ldap_default_authtok = {{ openkrb_sssd_admin_password }}
+ldap_default_authtok_type = password
+ldap_search_base = {{ openkrb_domain }}
+ldap_user_search_base = {{ openkrb_ou_users }},{{ openkrb_domain }}
+ldap_group_search_base = {{ openkrb_ou_groups }},{{ openkrb_domain }}
+ldap_tls_cacert = {{ security_ssl_cacert_path }}
+ldap_id_use_start_tls = True
